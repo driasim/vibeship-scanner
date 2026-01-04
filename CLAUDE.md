@@ -32,9 +32,9 @@ sveltekit, typescript, supabase
 
 # Vibeship Scanner Development Guide
 
-Security scanning tool analyzing GitHub repos with **12 parallel scanners**.
+Security scanning tool analyzing GitHub repos with **13 parallel scanners**.
 
-## Current Scanners (12 total)
+## Current Scanners (13 total)
 
 ### Universal Scanners (always run)
 | Scanner | Purpose |
@@ -43,7 +43,6 @@ Security scanning tool analyzing GitHub repos with **12 parallel scanners**.
 | **Trivy** | Dependency vulnerabilities + secrets |
 | **Gitleaks** | Hardcoded secrets detection |
 | **OSV-Scanner** | Google's OSV dependency vulnerability database |
-| **Nuclei** | Template-based file/code pattern detection |
 
 ### Stack-Specific Scanners (run when relevant files detected)
 | Scanner | Trigger | Purpose |
@@ -55,6 +54,7 @@ Security scanning tool analyzing GitHub repos with **12 parallel scanners**.
 | **Slither** | `.sol` files | Solidity static analysis (reentrancy, access control) |
 | **Aderyn** | `.sol` files | Solidity security patterns (Cyfrin) |
 | **Mythril** | `.sol` files | Solidity symbolic execution (deep analysis) |
+| **Solhint** | `.sol` files | Solidity linting + security rules |
 
 ## Future Scanners (TODO)
 

@@ -86,6 +86,12 @@ RUN curl -L https://foundry.paradigm.xyz | bash \
     && ln -s ~/.foundry/bin/forge /usr/local/bin/forge \
     && ln -s ~/.foundry/bin/cast /usr/local/bin/cast
 
+# ============================================
+# TOOL #14: Solhint - Solidity Linter
+# Security rules + best practices for smart contracts
+# ============================================
+RUN npm install -g solhint
+
 # Install Opengrep (LGPL fork of Semgrep - avoids commercial licensing issues)
 RUN curl -fsSL https://raw.githubusercontent.com/opengrep/opengrep/main/install.sh | bash \
     && ln -s ~/.opengrep/cli/latest/opengrep /usr/local/bin/opengrep
