@@ -6,7 +6,7 @@
 |---|------------|------|--------|---------|----------|----------|
 | 1 | [crytic/not-so-smart-contracts](https://github.com/crytic/not-so-smart-contracts) | Vuln Examples | ✅ Done | `08124dee` | 1,559 | 12/12 (100%) |
 | 2 | [SunWeb3Sec/DeFiVulnLabs](https://github.com/SunWeb3Sec/DeFiVulnLabs) | 48+ Vuln Types | ✅ Done | `d5c17038` | 4,721 | 57/57 (100%) |
-| 3 | [SunWeb3Sec/DeFiHackLabs](https://github.com/SunWeb3Sec/DeFiHackLabs) | 674+ Real Hacks | 🔄 Scanning | `c1cf11ff` | - | - |
+| 3 | [SunWeb3Sec/DeFiHackLabs](https://github.com/SunWeb3Sec/DeFiHackLabs) | 674+ Real Hacks | ⚠️ Partial | `c1cf11ff` | 44,194* | TBD |
 | 4 | [OpenZeppelin/ethernaut](https://github.com/OpenZeppelin/ethernaut) | CTF Challenges | ✅ Done | `31a42dde` | 1,688 | 31/31 (100%) |
 | 5 | [theredguild/damn-vulnerable-defi](https://github.com/theredguild/damn-vulnerable-defi) | DeFi CTF | ✅ Done | - | - | 18/18 (100%) |
 | 6 | [SmartContractSecurity/SWC-registry](https://github.com/SmartContractSecurity/SWC-registry) | SWC Test Cases | ⚠️ No .sol | `0eecb633` | 3 | N/A (markdown) |
@@ -94,3 +94,26 @@ SAST Coverage = (Detected SAST-able Vulns) / (Total SAST-able Vulns) * 100%
 ```
 
 Note: Skip runtime-only vulns (CSRF, rate limiting, business logic) from coverage calculation.
+
+---
+
+## Known Issues
+
+### * DeFiHackLabs Partial Save
+- Scan completed with 44,194 findings (259 CRIT, 8,022 HIGH, 9,596 MED)
+- DB save failed at batch 71/89 due to Supabase 504 Gateway Timeout
+- Only ~35,000 findings saved (79%)
+- Breakdown: opengrep 74,463 | solhint 39,350 | gitleaks 259 | checkov 2
+- Note: Slither/Aderyn/Mythril reported "no relevant files" despite 716 .sol files
+
+### Verification Status Warning
+Coverage percentages marked as "100%" in early repos were NOT verified against actual scan results.
+They were based on file counts, not on mapping findings to documented vulnerabilities.
+These need proper re-verification with the methodology:
+1. Get scan results with rule_id + file:line
+2. Compare to repo's documented vulnerabilities
+3. Mark each vuln as detected or gap
+
+### Data Quality Issues
+- `rule_id` showing as "unknown" in scan results (GOATCasino confirmed)
+- Cannot verify coverage without proper rule_id mapping
