@@ -1844,9 +1844,11 @@ def run_mythril(repo_dir: str) -> List[Dict[str, Any]]:
     findings = []
 
     # Check for Solidity files
+    # NOTE: Don't exclude test/tests - benchmark repos like DeFiVulnLabs have vulns in test dirs
+    # Only exclude node_modules, .git, and lib (Foundry dependencies)
     sol_files = []
     for root, dirs, files in os.walk(repo_dir):
-        dirs[:] = [d for d in dirs if d not in ['node_modules', '.git', 'lib', 'test', 'tests']]
+        dirs[:] = [d for d in dirs if d not in ['node_modules', '.git', 'lib']]
         for f in files:
             if f.endswith('.sol'):
                 sol_files.append(os.path.join(root, f))
@@ -1970,6 +1972,184 @@ def run_mythril(repo_dir: str) -> List[Dict[str, Any]]:
 
 # Nuclei removed - it's a DAST tool for scanning live web apps, not source code.
 # Our SAST needs are covered by Opengrep + Gitleaks.
+
+
+def run_solhint(repo_dir: str) -> List[Dict[str, Any]]:
+    """Run Solhint Solidity linter for security and style issues
+
+    Solhint checks for:
+    - Security issues (avoid-tx-origin, avoid-sha3, etc.)
+    - Best practices (no-unused-vars, no-empty-blocks, etc.)
+    - Style guide compliance
+
+    Complements Slither/Aderyn with additional lint-style checks.
+    """
+    findings = []
+
+    # Check for Solidity files
+    sol_files = []
+    for root, dirs, files in os.walk(repo_dir):
+        dirs[:] = [d for d in dirs if d not in ['node_modules', '.git', 'lib']]
+        for f in files:
+            if f.endswith('.sol'):
+                sol_files.append(os.path.join(root, f))
+
+    if not sol_files:
+        print("No Solidity files found, skipping Solhint", file=sys.stderr)
+        return findings
+
+    print(f"Found {len(sol_files)} Solidity files for Solhint", file=sys.stderr)
+
+    # Create a temporary .solhint.json config with recommended + security rules
+    solhint_config = {
+        "extends": "solhint:recommended",
+        "rules": {
+            # Security rules (ERROR severity)
+            "avoid-tx-origin": "error",
+            "avoid-sha3": "warn",
+            "func-visibility": ["error", {"ignoreConstructors": True}],
+            "state-visibility": "error",
+            "avoid-call-value": "error",
+            "check-send-result": "error",
+            "reentrancy": "error",
+            "avoid-suicide": "error",
+            "avoid-throw": "warn",
+            "compiler-version": "off",  # Don't enforce specific version
+            "no-inline-assembly": "warn",
+            # Best practice rules
+            "not-rely-on-time": "warn",
+            "not-rely-on-block-hash": "warn",
+            "no-complex-fallback": "warn",
+            "no-empty-blocks": "warn"
+        }
+    }
+
+    config_path = os.path.join(repo_dir, '.solhint.json')
+    config_existed = os.path.exists(config_path)
+    if not config_existed:
+        with open(config_path, 'w') as f:
+            json.dump(solhint_config, f)
+
+    # Run solhint with JSON output - pass actual files, not glob (subprocess doesn't expand globs)
+    cmd = [
+        'solhint',
+        '--formatter', 'json',
+    ] + sol_files  # Pass the actual file paths
+
+    try:
+        print(f"Running Solhint on {len(sol_files)} files (individually)", file=sys.stderr)
+        parse_errors = 0
+
+        # Process files one at a time to avoid parse errors breaking everything
+        for sol_file in sol_files:
+            file_cmd = ['solhint', '--formatter', 'json', sol_file]
+            try:
+                result = subprocess.run(
+                    file_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    cwd=repo_dir
+                )
+
+                # Make path relative
+                rel_file = sol_file
+                if rel_file.startswith(repo_dir):
+                    rel_file = rel_file[len(repo_dir):].lstrip('/').lstrip('\\')
+
+                # Solhint outputs JSON - may go to stdout or stderr depending on platform
+                # Check both, preferring the one with JSON content
+                output = ''
+                for out in [result.stderr or '', result.stdout or '']:
+                    if '[' in out and ']' in out:
+                        output = out
+                        break
+
+                if not output:
+                    output = result.stderr or result.stdout or ''
+
+                # Find the JSON array in the output (may have debug noise before it)
+                json_start = output.find('[')
+                json_end = output.rfind(']')
+
+                if json_start >= 0 and json_end > json_start:
+                    json_str = output[json_start:json_end + 1]
+                    try:
+                        data = json.loads(json_str)
+
+                        # Solhint outputs flat array of findings + conclusion object
+                        # Format: [{line, column, severity, message, ruleId, filePath}, ..., {conclusion: "..."}]
+                        for msg in data:
+                            # Skip the conclusion summary object
+                            if 'conclusion' in msg:
+                                continue
+
+                            # Skip if no ruleId (invalid entry)
+                            rule_id = msg.get('ruleId')
+                            if not rule_id:
+                                continue
+
+                            # Map severity: "Error" = high, "Warning" = medium/low
+                            severity_str = msg.get('severity', 'Warning')
+                            severity = 'medium' if severity_str == 'Error' else 'low'
+
+                            # Map security rules to higher severity
+                            security_rules = ['avoid-tx-origin', 'avoid-sha3', 'avoid-suicide',
+                                             'avoid-throw', 'func-visibility', 'state-visibility',
+                                             'avoid-call-value', 'check-send-result', 'reentrancy',
+                                             'no-inline-assembly', 'not-rely-on-time', 'not-rely-on-block-hash']
+                            if rule_id in security_rules:
+                                severity = 'high' if severity_str == 'Error' else 'medium'
+
+                            findings.append({
+                                'id': hashlib.md5(f"solhint-{rule_id}-{rel_file}:{msg.get('line', 0)}".encode()).hexdigest()[:12],
+                                'ruleId': f"solhint-{rule_id}",
+                                'severity': severity,
+                                'category': 'code',
+                                'title': f"[Solhint] {msg.get('message', 'Issue')}",
+                                'description': msg.get('message', ''),
+                                'location': {
+                                    'file': rel_file,
+                                    'line': msg.get('line', 0),
+                                    'column': msg.get('column', 0)
+                                },
+                                'fix': {
+                                    'available': False,
+                                    'template': None
+                                },
+                                'references': [f"https://protofire.github.io/solhint/docs/rules/{rule_id}"]
+                            })
+                    except json.JSONDecodeError:
+                        parse_errors += 1
+                else:
+                    # No JSON found in output - could be no issues or a real error
+                    if result.returncode == 255:
+                        # Config error
+                        parse_errors += 1
+
+            except subprocess.TimeoutExpired:
+                parse_errors += 1
+            except Exception:
+                parse_errors += 1
+
+        print(f"Solhint found {len(findings)} findings", file=sys.stderr)
+        if parse_errors > 0:
+            print(f"Solhint: {parse_errors} files had parse errors (skipped)", file=sys.stderr)
+
+    except FileNotFoundError:
+        print("Solhint not installed, skipping", file=sys.stderr)
+    except Exception as e:
+        print(f"Solhint error: {type(e).__name__}: {e}", file=sys.stderr)
+    finally:
+        # Clean up temp config if we created it
+        if not config_existed and os.path.exists(config_path):
+            try:
+                os.remove(config_path)
+            except Exception:
+                pass
+
+    print(f"Solhint found {len(findings)} findings", file=sys.stderr)
+    return findings
 
 
 # ============================================
@@ -2114,6 +2294,14 @@ def run_all_scanners(repo_dir: str, stack: Dict[str, Any] = None) -> Dict[str, A
             'args': (repo_dir,),
             'category': SCANNER_CATEGORY_STACK,
             'targets': 'Solidity symbolic execution',
+            'trigger': '.sol files'
+        },
+        {
+            'name': 'solhint',
+            'func': run_solhint,
+            'args': (repo_dir,),
+            'category': SCANNER_CATEGORY_STACK,
+            'targets': 'Solidity linting + security rules',
             'trigger': '.sol files'
         },
     ]
