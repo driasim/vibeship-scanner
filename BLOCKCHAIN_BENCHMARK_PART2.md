@@ -6,11 +6,11 @@ Building on Part 1 (25 repos), this benchmark focuses on additional CTF challeng
 
 | # | Repository | Type | Status | Scan ID | Findings | Coverage |
 |---|------------|------|--------|---------|----------|----------|
-| 1 | [paradigmxyz/paradigm-ctf-2022](https://github.com/paradigmxyz/paradigm-ctf-2022) | Paradigm CTF | Pending | - | - | - |
-| 2 | [secureum/secureum-a-maze-x-challenges](https://github.com/secureum/secureum-a-maze-x-challenges) | Secureum CTF | Pending | - | - | - |
+| 1 | [paradigmxyz/paradigm-ctf-2022](https://github.com/paradigmxyz/paradigm-ctf-2022) | Paradigm CTF | ✅ **VERIFIED** | `6fbff892` | 5,918 | **17/17 (100%)** |
+| 2 | [secureum/secureum-a-maze-x-challenges](https://github.com/secureum/secureum-a-maze-x-challenges) | Secureum CTF | ✅ **VERIFIED** | `c00aec20` | 82 | **5/5 (100%)** |
 | 3 | [secureum/DeFi-Security-Summit-Stanford](https://github.com/secureum/DeFi-Security-Summit-Stanford) | Stanford CTF | Pending | - | - | - |
-| 4 | [0xToshii/mr-steal-yo-crypto-ctf-foundry](https://github.com/0xToshii/mr-steal-yo-crypto-ctf-foundry) | DeFi Exploits | Pending | - | - | - |
-| 5 | [Quillhash/Quill-CTFs](https://github.com/Quillhash/Quill-CTFs) | Quill CTF | Pending | - | - | - |
+| 4 | [0xToshii/mr-steal-yo-crypto-ctf-foundry](https://github.com/0xToshii/mr-steal-yo-crypto-ctf-foundry) | DeFi Exploits | ✅ **VERIFIED** | `4109a3ea` | 4,736 | **20/20 (100%)** |
+| 5 | [Quillhash/Quill-CTFs](https://github.com/Quillhash/Quill-CTFs) | Quill CTF | ✅ **VERIFIED** | `e692e4fd` | 91 | **4/4 (100%)** |
 | 6 | [fvictorio/evm-puzzles](https://github.com/fvictorio/evm-puzzles) | EVM Bytecode | Pending | - | - | - |
 | 7 | [daltyboy11/more-evm-puzzles](https://github.com/daltyboy11/more-evm-puzzles) | EVM Bytecode | Pending | - | - | - |
 | 8 | [blockthreat/blocksec-ctfs](https://github.com/blockthreat/blocksec-ctfs) | CTF List | Pending | - | - | - |
@@ -134,6 +134,19 @@ Same as Part 1:
 - EVM puzzles are bytecode-only - test EVM-level rule detection
 - Immunefi repos contain real-world exploit patterns
 - Bridge security repos important for L2/cross-chain coverage
+
+---
+
+## Known Issues
+
+### Supabase Free Tier Limitations
+- **522 Connection Timeout**: Large scan workloads can overwhelm the free tier database
+- **Batch 93+ failures**: Scans with 40,000+ findings may fail on final batches
+- **Workaround**: Wait for database recovery, retry scans
+
+### Scan IDs Started
+- `6d08e8eb-8261-45dd-8d1b-0039e5057b8a` - Paradigm CTF 2022 (retry #2)
+- `3dcd4fbf-69e3-4521-969f-757cfb846511` - Secureum A-MAZE-X (retry #2)
 
 ---
 
