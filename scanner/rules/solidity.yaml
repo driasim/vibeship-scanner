@@ -6226,17 +6226,33 @@ rules:
       references:
         - https://medium.com/immunefi/dfx-finance-rounding-error-bugfix-review-17ba5ffb4114
     patterns:
+      - pattern-inside: |
+          function $FUNC(...) {
+            ...
+          }
       - pattern-either:
+          # Direct division before mint
           - pattern: |
-              $SHARES = $AMOUNT / $DENOMINATOR;
+              $VAR = $A / $B;
               ...
-              _mint($TO, $SHARES)
+              _mint($TO, $VAR)
           - pattern: |
-              $SHARES = $AMOUNT * $NUMERATOR / $DENOMINATOR;
+              $VAR = $A * $N / $B;
               ...
-              _mint($TO, $SHARES)
+              _mint($TO, $VAR)
+          # Inline division in mint
+          - pattern: _mint($TO, $A / $B)
+          - pattern: _mint($TO, ($A * $N) / $B)
+          # Share calculations with division
+          - pattern: |
+              $VAR = $AMOUNT.mul($X).div($Y);
+              ...
+              _mint($TO, $VAR)
       - pattern-not-inside: |
-          require($SHARES > 0, ...);
+          require($VAR > 0, ...);
+          ...
+      - pattern-not-inside: |
+          if ($VAR == 0) revert ...;
           ...
 
   - id: sol-missing-zero-amount-check
@@ -6280,34 +6296,48 @@ rules:
       cwe: "CWE-284: Improper Access Control"
       references:
         - https://medium.com/immunefi/enzyme-finance-missing-privilege-check-bugfix-review-8c4e8e7d4b47
-    patterns:
-      - pattern-either:
-          - pattern: |
-              function $FUNC(...) {
-                ...
-                address $SENDER = _msgSender();
-                ...
-              }
-          - pattern: |
-              function _msgSender() internal view returns (address) {
-                ...
-                return abi.decode($DATA, (address));
-              }
-      - pattern-not-inside: |
-          require(isTrustedForwarder(msg.sender), ...);
-          ...
-      - pattern-not-inside: |
-          if (!isTrustedForwarder(msg.sender)) { ... }
-          ...
+    pattern-either:
+      # _msgSender returning decoded address from calldata
+      - pattern: |
+          function _msgSender() $VISIBILITY $MUTABILITY returns (address) {
+            ...
+            return abi.decode($DATA, (address));
+          }
+      - pattern: |
+          function _msgSender() $VISIBILITY $MUTABILITY returns (address $RET) {
+            ...
+            $RET = abi.decode($DATA, (address));
+            ...
+          }
+      # Extracting sender from msg.data without check
+      - pattern: |
+          address $SENDER = address(bytes20(msg.data[$START:$END]));
+      - pattern: |
+          return address(bytes20(msg.data[$START:$END]));
 
   - id: sol-erc2771-without-trusted-check
-    message: "ERC2771 _msgSender() used without trustedForwarder validation - meta-tx spoofing possible"
+    message: "ERC2771 _msgSender() extracts sender from calldata - ensure trustedForwarder validation"
     languages: [solidity]
     severity: WARNING
     metadata:
       category: security
       cwe: "CWE-284: Improper Access Control"
-    pattern-regex: 'function\s+_msgSender\s*\([^)]*\)[^{]*\{[^}]*msg\.data\.length\s*>=\s*20[^}]*\}'
+    pattern-either:
+      # Common ERC2771 pattern - checking msg.data.length
+      - pattern: |
+          if (msg.data.length >= $N) {
+            ...
+            return address(bytes20(...));
+          }
+      # Assembly extraction from calldata
+      - pattern: |
+          assembly {
+            ...
+            shr(..., calldataload(...))
+            ...
+          }
+      # msg.data slicing for sender
+      - pattern: msg.data[msg.data.length - 20:]
 
   # ============================================
   # NEW: Balance Manipulation Vulnerabilities
@@ -6322,20 +6352,25 @@ rules:
       cwe: "CWE-682: Incorrect Calculation"
       references:
         - https://medium.com/immunefi/yield-protocol-logic-error-bugfix-review-7b86741e6f50
-    patterns:
-      - pattern-either:
-          - pattern: $TOKEN.balanceOf(address(this)) * $X
-          - pattern: $X * $TOKEN.balanceOf(address(this))
-          - pattern: $TOKEN.balanceOf(address(this)) / $X
-          - pattern: $X / $TOKEN.balanceOf(address(this))
-          - pattern: |
-              $BAL = $TOKEN.balanceOf(address(this));
-              ...
-              $RESULT = $BAL * $MULTIPLIER
-          - pattern: |
-              $BAL = $TOKEN.balanceOf(address(this));
-              ...
-              $RESULT = $BAL / $DIVISOR
+    pattern-either:
+      # Direct usage in math expressions
+      - pattern: $TOKEN.balanceOf(address(this)) * $X
+      - pattern: $X * $TOKEN.balanceOf(address(this))
+      - pattern: $TOKEN.balanceOf(address(this)) / $X
+      - pattern: $X / $TOKEN.balanceOf(address(this))
+      - pattern: $TOKEN.balanceOf(address(this)) + $X
+      - pattern: $TOKEN.balanceOf(address(this)) - $X
+      # Math library patterns
+      - pattern: $TOKEN.balanceOf(address(this)).mul($X)
+      - pattern: $TOKEN.balanceOf(address(this)).div($X)
+      - pattern: $X.mul($TOKEN.balanceOf(address(this)))
+      - pattern: $X.div($TOKEN.balanceOf(address(this)))
+      # Ratio calculations using balance
+      - pattern: ($A * $B) / $TOKEN.balanceOf(address(this))
+      - pattern: ($TOKEN.balanceOf(address(this)) * $A) / $B
+      # IERC20 interface pattern
+      - pattern: IERC20($TOKEN).balanceOf(address(this)) * $X
+      - pattern: $X / IERC20($TOKEN).balanceOf(address(this))
 
   - id: sol-current-balance-vs-cached
     message: "Using current balance instead of cached value - vulnerable to donation/flash loan attacks (Yield Protocol pattern)"
@@ -6356,18 +6391,25 @@ rules:
           - pattern: address(this).balance
 
   - id: sol-lp-share-calculation-manipulation
-    message: "LP share calculation using current reserves - flashloan can inflate/deflate share value"
+    message: "LP share calculation using current balance - flashloan can inflate/deflate share value"
     languages: [solidity]
     severity: WARNING
     metadata:
       category: security
       cwe: "CWE-682: Incorrect Calculation"
-    patterns:
-      - pattern-either:
-          - pattern: |
-              $SHARES = ($AMOUNT * totalSupply) / $TOKEN.balanceOf(address(this))
-          - pattern: |
-              $SHARES = ($AMOUNT * totalSupply()) / reserve$N
+    pattern-either:
+      # Direct balance in share calculation
+      - pattern: ($AMOUNT * totalSupply) / $TOKEN.balanceOf(address(this))
+      - pattern: ($AMOUNT * totalSupply()) / $TOKEN.balanceOf(address(this))
+      - pattern: $AMOUNT * totalSupply / $TOKEN.balanceOf(address(this))
+      - pattern: $AMOUNT.mul(totalSupply).div($TOKEN.balanceOf(address(this)))
+      - pattern: $AMOUNT.mul(totalSupply()).div($TOKEN.balanceOf(address(this)))
+      # Share calculation patterns
+      - pattern: ($AMOUNT * $SUPPLY) / $TOKEN.balanceOf(address(this))
+      - pattern: ($TOKEN.balanceOf(address(this)) * $SUPPLY) / $TOTAL
+      # Math library variants
+      - pattern: Math.mulDiv($AMOUNT, totalSupply, $TOKEN.balanceOf(address(this)))
+      - pattern: Math.mulDiv($AMOUNT, totalSupply(), $TOKEN.balanceOf(address(this)))
 
   # ============================================
   # NEW: Utilization Rate Manipulation
