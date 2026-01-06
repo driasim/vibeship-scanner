@@ -1350,6 +1350,22 @@ def run_slither(repo_dir: str) -> List[Dict[str, Any]]:
 
     print(f"Found {len(sol_files)} Solidity files", file=sys.stderr)
 
+    # Skip compilation for massive repos to prevent OOM
+    MAX_SOL_FILES_FOR_COMPILATION = 400
+    if len(sol_files) > MAX_SOL_FILES_FOR_COMPILATION:
+        print(f"LARGE REPO: {len(sol_files)} Solidity files exceeds {MAX_SOL_FILES_FOR_COMPILATION} threshold", file=sys.stderr)
+        print("Skipping Slither (requires compilation) - use Opengrep for pattern-based analysis", file=sys.stderr)
+        findings.append({
+            'ruleId': 'scanner-large-repo-warning',
+            'severity': 'info',
+            'title': f'Large repository ({len(sol_files)} Solidity files) - compilation-based analysis skipped',
+            'description': f'This repository contains {len(sol_files)} Solidity files, which exceeds the {MAX_SOL_FILES_FOR_COMPILATION} file threshold for compilation-based scanners (Slither, Aderyn, Mythril). Pattern-based scanning (Opengrep) still runs. For full analysis, scan specific subdirectories.',
+            'file': repo_dir,
+            'line': 0,
+            'category': 'scanner-limitation'
+        })
+        return findings
+
     # Detect project type (check root and common subdirectories)
     def find_config(filename):
         if os.path.exists(os.path.join(repo_dir, filename)):
@@ -1589,6 +1605,12 @@ def run_slither_upgradeability(repo_dir: str) -> List[Dict[str, Any]]:
 
     if not sol_files:
         print("No .sol files found, skipping slither-check-upgradeability", file=sys.stderr)
+        return findings
+
+    # Skip for massive repos to prevent OOM
+    MAX_SOL_FILES_FOR_COMPILATION = 400
+    if len(sol_files) > MAX_SOL_FILES_FOR_COMPILATION:
+        print(f"LARGE REPO: Skipping slither-upgradeability ({len(sol_files)} files > {MAX_SOL_FILES_FOR_COMPILATION} threshold)", file=sys.stderr)
         return findings
 
     # Detect proxy patterns by scanning file contents
@@ -1943,6 +1965,12 @@ def run_aderyn(repo_dir: str) -> List[Dict[str, Any]]:
 
     print(f"Found {len(sol_files)} Solidity files for Aderyn", file=sys.stderr)
 
+    # Skip for massive repos to prevent OOM
+    MAX_SOL_FILES_FOR_COMPILATION = 400
+    if len(sol_files) > MAX_SOL_FILES_FOR_COMPILATION:
+        print(f"LARGE REPO: Skipping Aderyn ({len(sol_files)} files > {MAX_SOL_FILES_FOR_COMPILATION} threshold)", file=sys.stderr)
+        return findings
+
     # Aderyn outputs JSON report
     output_file = os.path.join(repo_dir, 'aderyn-report.json')
 
@@ -2073,6 +2101,12 @@ def run_mythril(repo_dir: str) -> List[Dict[str, Any]]:
         return findings
 
     print(f"Found {len(sol_files)} Solidity files for Mythril", file=sys.stderr)
+
+    # Skip for massive repos to prevent OOM during compilation
+    MAX_SOL_FILES_FOR_COMPILATION = 400
+    if len(sol_files) > MAX_SOL_FILES_FOR_COMPILATION:
+        print(f"LARGE REPO: Skipping Mythril ({len(sol_files)} files > {MAX_SOL_FILES_FOR_COMPILATION} threshold)", file=sys.stderr)
+        return findings
 
     # Limit to first 5 files to avoid timeout (Mythril is very slow)
     if len(sol_files) > 5:
