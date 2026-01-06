@@ -72,6 +72,8 @@ ALWAYS_LOAD_RULES = [
     'templates.yaml',   # Pug, EJS, Handlebars, Nunjucks, Mustache, Twig XSS detection
     'yaml-config.yaml', # CI/CD, Kubernetes, Docker secrets and misconfigs
     'ethernaut-gaps.yaml', # Ethernaut wargame gap-closing rules for Solidity
+    'defi-advanced.yaml',  # DeFi protocol patterns (flash loans, AMM, lending, oracles)
+    'security-hints.yaml', # Security guidance and fuzzing recommendations
 ]
 
 
@@ -2649,6 +2651,119 @@ def run_foundry_fuzz(repo_dir: str) -> List[Dict[str, Any]]:
     return findings
 
 
+def check_fuzz_coverage(repo_dir: str) -> List[Dict[str, Any]]:
+    """Check for Solidity contracts that should have fuzz tests but don't
+
+    This is a lightweight static check that flags:
+    - Contracts with complex math (division, exponentiation) without fuzz tests
+    - DeFi patterns (swap, deposit, withdraw) without fuzz tests
+    - Gives developers actionable guidance on what to fuzz
+
+    Returns INFO-level findings to guide developers.
+    """
+    findings = []
+
+    # Patterns that indicate complex/risky operations needing fuzz tests
+    FUZZ_WORTHY_PATTERNS = [
+        (r'\s*\*\s*[^/]+\s*/\s*', 'Complex arithmetic (multiply then divide)'),
+        (r'\.mul\([^)]+\)\.div\(', 'SafeMath arithmetic'),
+        (r'\*\*\s*\d+', 'Exponentiation'),
+        (r'Math\.sqrt\(', 'Square root calculation'),
+        (r'Math\.mulDiv\(', 'MulDiv calculation'),
+        (r'FullMath\.mulDiv\(', 'FullMath calculation'),
+        (r'function\s+swap\s*\(', 'Swap function'),
+        (r'function\s+deposit\s*\(', 'Deposit function'),
+        (r'function\s+withdraw\s*\(', 'Withdraw function'),
+        (r'function\s+mint\s*\(', 'Mint function'),
+        (r'function\s+burn\s*\(', 'Burn function'),
+        (r'function\s+liquidate\s*\(', 'Liquidation function'),
+        (r'function\s+borrow\s*\(', 'Borrow function'),
+        (r'function\s+repay\s*\(', 'Repay function'),
+    ]
+
+    # Find all Solidity source files (not tests)
+    sol_files = []
+    test_files = set()
+
+    for root, dirs, files in os.walk(repo_dir):
+        dirs[:] = [d for d in dirs if d not in ['node_modules', '.git', 'lib', 'out', 'cache', 'forge-std']]
+        for f in files:
+            if f.endswith('.sol'):
+                filepath = os.path.join(root, f)
+                if f.endswith('.t.sol') or 'test' in root.lower():
+                    test_files.add(os.path.basename(f).replace('.t.sol', '').replace('.sol', ''))
+                else:
+                    sol_files.append(filepath)
+
+    if not sol_files:
+        return findings
+
+    # Check each source file for fuzz-worthy patterns
+    contracts_needing_fuzz = []
+
+    for sol_file in sol_files:
+        try:
+            with open(sol_file, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+
+            # Get contract name
+            contract_match = re.search(r'contract\s+(\w+)', content)
+            if not contract_match:
+                continue
+            contract_name = contract_match.group(1)
+
+            # Check if corresponding test file exists
+            has_test = contract_name in test_files or f"{contract_name}Test" in test_files
+
+            # Find risky patterns
+            risky_patterns_found = []
+            for pattern, description in FUZZ_WORTHY_PATTERNS:
+                if re.search(pattern, content):
+                    risky_patterns_found.append(description)
+
+            if risky_patterns_found and not has_test:
+                rel_path = os.path.relpath(sol_file, repo_dir)
+                contracts_needing_fuzz.append({
+                    'file': rel_path,
+                    'contract': contract_name,
+                    'patterns': risky_patterns_found[:3]  # Limit to top 3
+                })
+        except Exception:
+            continue
+
+    # Generate findings for contracts without fuzz coverage
+    for contract in contracts_needing_fuzz[:10]:  # Limit to 10 findings
+        patterns_str = ', '.join(contract['patterns'])
+        findings.append({
+            'id': hashlib.md5(f"fuzz-coverage-{contract['contract']}".encode()).hexdigest()[:12],
+            'ruleId': 'missing-fuzz-coverage',
+            'severity': 'info',
+            'category': 'testing',
+            'title': f"[Fuzz Coverage] {contract['contract']} has no fuzz tests",
+            'description': f"Contract '{contract['contract']}' contains risky patterns ({patterns_str}) but has no corresponding fuzz tests. Consider adding invariant tests with Foundry or Echidna.",
+            'location': {
+                'file': contract['file'],
+                'line': 1,
+                'column': 0
+            },
+            'fix': {
+                'available': False,
+                'template': f"""// Add to test/{contract['contract']}.t.sol
+function testFuzz_{contract['contract']}(uint256 input) public {{
+    vm.assume(input > 0 && input < type(uint128).max);
+    // Add invariant assertions
+}}"""
+            },
+            'references': [
+                'https://book.getfoundry.sh/forge/fuzz-testing',
+                'https://github.com/crytic/echidna'
+            ]
+        })
+
+    print(f"Fuzz coverage check found {len(findings)} contracts without fuzz tests", file=sys.stderr)
+    return findings
+
+
 # ============================================
 # CONSOLIDATED SCANNER ORCHESTRATION
 # All scanner execution goes through here
@@ -2824,6 +2939,14 @@ def run_all_scanners(repo_dir: str, stack: Dict[str, Any] = None) -> Dict[str, A
             'category': SCANNER_CATEGORY_STACK,
             'targets': 'Foundry fuzz test failures',
             'trigger': 'foundry.toml + .t.sol files'
+        },
+        {
+            'name': 'fuzz-coverage',
+            'func': check_fuzz_coverage,
+            'args': (repo_dir,),
+            'category': SCANNER_CATEGORY_STACK,
+            'targets': 'Missing fuzz test coverage detection',
+            'trigger': '.sol files'
         },
     ]
 

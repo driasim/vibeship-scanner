@@ -1,0 +1,592 @@
+rules:
+  # ============================================
+  # DeFi Advanced Security Rules
+  # Based on real exploits from rekt.news, Immunefi, and audit findings
+  # ============================================
+
+  # ============================================
+  # FLASH LOAN ATTACK PATTERNS
+  # Source: Euler ($197M), bZx ($8M), PancakeBunny ($45M)
+  # ============================================
+
+  - id: defi-flash-loan-no-callback-validation
+    message: "Flash loan callback without sender validation - attacker can call directly"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-284: Improper Access Control"
+      exploit: "Euler Finance ($197M)"
+      references:
+        - https://rekt.news/euler-rekt/
+    patterns:
+      - pattern-either:
+          - pattern: |
+              function $CALLBACK(...) external {
+                ...
+              }
+          - pattern: |
+              function $CALLBACK(...) public {
+                ...
+              }
+      - metavariable-regex:
+          metavariable: $CALLBACK
+          regex: "(executeOperation|onFlashLoan|uniswapV2Call|uniswapV3FlashCallback|pancakeCall)"
+      - pattern-not-inside: |
+          require(msg.sender == $POOL, ...);
+          ...
+      - pattern-not-inside: |
+          if (msg.sender != $POOL) revert ...;
+          ...
+
+  - id: defi-flash-loan-reentrancy
+    message: "Flash loan callback with state changes before repayment - reentrancy risk"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      exploit: "Multiple flash loan reentrancy attacks"
+    patterns:
+      - pattern-inside: |
+          function executeOperation(...) {
+            ...
+          }
+      - pattern-either:
+          - pattern: |
+              $STATE[$KEY] = $VALUE;
+              ...
+              $TOKEN.transfer(...)
+          - pattern: |
+              balances[$USER] = ...;
+              ...
+              return true
+
+  - id: defi-unchecked-flash-loan-fee
+    message: "Flash loan fee not validated - could be manipulated or cause underflow"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+    pattern-either:
+      - pattern: |
+          function executeOperation(..., uint256 $FEE, ...) {
+            ...
+            $TOKEN.transfer($POOL, $AMOUNT + $FEE)
+          }
+      - pattern: |
+          uint256 $REPAY = $AMOUNT + $FEE;
+
+  # ============================================
+  # AMM/DEX VULNERABILITIES
+  # Source: Curve ($70M), SushiSwap, Uniswap exploits
+  # ============================================
+
+  - id: defi-missing-slippage-protection
+    message: "Swap function without slippage protection - vulnerable to sandwich attacks"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      exploit: "Sandwich attacks on DEXes"
+      references:
+        - https://eigenphi.io/mev/ethereum/sandwich
+    patterns:
+      - pattern-inside: |
+          function $SWAP(...) {
+            ...
+          }
+      - metavariable-regex:
+          metavariable: $SWAP
+          regex: "(swap|exchange|trade)"
+      - pattern-either:
+          - pattern: $ROUTER.swapExactTokensForTokens($AMOUNT, 0, ...)
+          - pattern: $ROUTER.swapExactETHForTokens(0, ...)
+          - pattern: $POOL.swap(..., 0, ...)
+
+  - id: defi-swap-no-deadline
+    message: "Swap without deadline parameter - transaction can be held and executed at unfavorable price"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: $ROUTER.swapExactTokensForTokens(..., type(uint256).max)
+          - pattern: $ROUTER.swapExactTokensForTokens(..., block.timestamp + 9999999)
+          - pattern: $ROUTER.swapExactETHForTokens(..., type(uint256).max)
+
+  - id: defi-amm-k-invariant-violation
+    message: "AMM operation may violate constant product invariant - check k = x * y"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+    patterns:
+      - pattern-inside: |
+          function $FUNC(...) {
+            ...
+          }
+      - pattern-either:
+          - pattern: |
+              reserve0 = ...;
+              reserve1 = ...;
+          - pattern: |
+              _reserve0 = ...;
+              _reserve1 = ...;
+      - pattern-not-inside: |
+          require($R0 * $R1 >= ..., ...);
+          ...
+
+  - id: defi-lp-token-inflation
+    message: "LP token minting without minimum liquidity check - first depositor can inflate share price"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      exploit: "First depositor LP inflation attacks"
+    patterns:
+      - pattern-inside: |
+          function $ADD_LIQUIDITY(...) {
+            ...
+          }
+      - pattern: |
+          if (totalSupply == 0) {
+            ...
+            _mint($TO, $AMOUNT)
+          }
+      - pattern-not-inside: |
+          _mint(address(0), MINIMUM_LIQUIDITY);
+          ...
+
+  # ============================================
+  # LENDING PROTOCOL VULNERABILITIES
+  # Source: Compound ($80M), Aave, Cream Finance
+  # ============================================
+
+  - id: defi-liquidation-no-health-check
+    message: "Liquidation function without health factor validation"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      exploit: "Compound liquidation bug"
+    patterns:
+      - pattern-inside: |
+          function liquidate(...) {
+            ...
+          }
+      - pattern-not-inside: |
+          require($HEALTH < ..., ...);
+          ...
+      - pattern-not-inside: |
+          if ($HEALTH >= ...) revert ...;
+          ...
+
+  - id: defi-collateral-factor-manipulation
+    message: "Collateral factor can be changed without delay - instant liquidation risk"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+    patterns:
+      - pattern: |
+          function setCollateralFactor(..., uint256 $FACTOR) {
+            ...
+            collateralFactor[$TOKEN] = $FACTOR;
+          }
+      - pattern-not-inside: |
+          require(block.timestamp > ..., ...);
+          ...
+
+  - id: defi-borrow-without-collateral-check
+    message: "Borrow function without sufficient collateral validation"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+    patterns:
+      - pattern-inside: |
+          function borrow(...) {
+            ...
+          }
+      - pattern: |
+          $TOKEN.transfer(msg.sender, $AMOUNT)
+      - pattern-not-inside: |
+          require($COLLATERAL >= ..., ...);
+          ...
+
+  - id: defi-interest-rate-manipulation
+    message: "Interest rate calculation using current utilization - can be manipulated with flash loans"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      exploit: "Flash loan interest manipulation"
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $RATE = $BORROWED * $BASE / $TOTAL
+          - pattern: |
+              utilization = totalBorrowed * 1e18 / totalDeposited
+
+  # ============================================
+  # VAULT / ERC4626 VULNERABILITIES
+  # Source: Multiple vault inflation attacks
+  # ============================================
+
+  - id: defi-vault-share-inflation
+    message: "ERC4626 vault vulnerable to share inflation attack - first depositor can steal funds"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-682: Incorrect Calculation"
+      references:
+        - https://blog.openzeppelin.com/a-]]]]]]novel-defense-against-erc4626-inflation-attacks
+    patterns:
+      - pattern-inside: |
+          function deposit(...) {
+            ...
+          }
+      - pattern: |
+          shares = assets * totalSupply / totalAssets
+      - pattern-not-inside: |
+          if (totalSupply == 0) {
+            shares = assets - OFFSET;
+            ...
+          }
+
+  - id: defi-vault-rounding-direction
+    message: "Vault share calculation may round in wrong direction - always round against user"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+    patterns:
+      - pattern-either:
+          # Deposit should round DOWN (fewer shares)
+          - pattern: |
+              function deposit(...) {
+                ...
+                shares = $ASSETS * $SUPPLY / $TOTAL;
+                ...
+              }
+          # Withdraw should round UP (more assets needed)
+          - pattern: |
+              function withdraw(...) {
+                ...
+                assets = $SHARES * $TOTAL / $SUPPLY;
+                ...
+              }
+
+  - id: defi-vault-no-minimum-deposit
+    message: "Vault without minimum deposit - dust deposits can cause rounding issues"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security
+    patterns:
+      - pattern-inside: |
+          function deposit(uint256 $ASSETS, ...) {
+            ...
+          }
+      - pattern-not-inside: |
+          require($ASSETS >= $MIN, ...);
+          ...
+
+  # ============================================
+  # GOVERNANCE VULNERABILITIES
+  # Source: Beanstalk ($182M), Tornado Cash governance
+  # ============================================
+
+  - id: defi-governance-flash-loan-voting
+    message: "Governance voting without snapshot - vulnerable to flash loan attacks"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      exploit: "Beanstalk ($182M)"
+      references:
+        - https://rekt.news/beanstalk-rekt/
+    patterns:
+      - pattern-inside: |
+          function vote(...) {
+            ...
+          }
+      - pattern: |
+          uint256 $VOTES = $TOKEN.balanceOf(msg.sender)
+      - pattern-not-inside: |
+          uint256 $VOTES = $TOKEN.getPastVotes(msg.sender, $SNAPSHOT)
+
+  - id: defi-governance-no-timelock
+    message: "Governance proposal execution without timelock - instant malicious upgrades possible"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+    patterns:
+      - pattern-inside: |
+          function execute(...) {
+            ...
+          }
+      - pattern-either:
+          - pattern: $TARGET.call($DATA)
+          - pattern: $IMPL.delegatecall($DATA)
+      - pattern-not-inside: |
+          require(block.timestamp >= $TIMELOCK, ...);
+          ...
+
+  - id: defi-governance-quorum-manipulation
+    message: "Quorum based on current supply - can be manipulated by burning/minting"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+    pattern: |
+      uint256 $QUORUM = totalSupply() * $PERCENT / 100
+
+  # ============================================
+  # BRIDGE / CROSS-CHAIN VULNERABILITIES
+  # Source: Ronin ($624M), Nomad ($190M), Wormhole ($326M)
+  # ============================================
+
+  - id: defi-bridge-signature-replay
+    message: "Bridge message without nonce or chain ID - vulnerable to replay attacks"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      exploit: "Nomad Bridge ($190M)"
+      references:
+        - https://rekt.news/nomad-rekt/
+    patterns:
+      - pattern-inside: |
+          function $PROCESS(..., bytes $SIGNATURE, ...) {
+            ...
+          }
+      - pattern: |
+          $SIGNER = ecrecover($HASH, ...)
+      - pattern-not-inside: |
+          bytes32 $HASH = keccak256(abi.encode(..., nonce, ...));
+          ...
+      - pattern-not-inside: |
+          bytes32 $HASH = keccak256(abi.encode(..., block.chainid, ...));
+          ...
+
+  - id: defi-bridge-merkle-proof-validation
+    message: "Merkle proof validation may be bypassable - ensure proper leaf encoding"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      exploit: "Ronin Bridge"
+    patterns:
+      - pattern: |
+          MerkleProof.verify($PROOF, $ROOT, $LEAF)
+      - pattern-not-inside: |
+          bytes32 $LEAF = keccak256(abi.encodePacked(...));
+          ...
+
+  - id: defi-bridge-insufficient-confirmations
+    message: "Cross-chain message processed without sufficient confirmations"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+    patterns:
+      - pattern-inside: |
+          function $RECEIVE_MESSAGE(...) {
+            ...
+          }
+      - pattern-not-inside: |
+          require($CONFIRMATIONS >= $MIN, ...);
+          ...
+
+  # ============================================
+  # ORACLE VULNERABILITIES
+  # Source: Mango Markets ($114M), Cream Finance
+  # ============================================
+
+  - id: defi-oracle-spot-price
+    message: "Using spot price from DEX as oracle - vulnerable to flash loan manipulation"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      exploit: "Mango Markets ($114M), Cream Finance"
+    patterns:
+      - pattern-either:
+          - pattern: $PAIR.getReserves()
+          - pattern: $POOL.slot0()
+          - pattern: $AMM.getCurrentPrice()
+
+  - id: defi-chainlink-no-staleness-check
+    message: "Chainlink oracle without staleness check - may return stale price"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-754: Improper Check for Unusual Conditions"
+    patterns:
+      - pattern: |
+          (, int256 $PRICE, , , ) = $FEED.latestRoundData()
+      - pattern-not-inside: |
+          require(block.timestamp - $UPDATED < $MAX_AGE, ...);
+          ...
+      - pattern-not-inside: |
+          if (block.timestamp - $UPDATED > $MAX_AGE) revert ...;
+          ...
+
+  - id: defi-chainlink-no-round-check
+    message: "Chainlink oracle without round completeness check"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+    patterns:
+      - pattern: |
+          ($ROUND, int256 $PRICE, , $UPDATED, $ANSWERED) = $FEED.latestRoundData()
+      - pattern-not-inside: |
+          require($ANSWERED >= $ROUND, ...);
+          ...
+
+  - id: defi-oracle-single-source
+    message: "Single oracle source without fallback - single point of failure"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security
+    patterns:
+      - pattern-inside: |
+          function getPrice(...) {
+            ...
+          }
+      - pattern: |
+          return $ORACLE.getPrice(...)
+      - pattern-not-inside: |
+          try $ORACLE.getPrice(...) { ... } catch { ... }
+
+  # ============================================
+  # TOKEN VULNERABILITIES
+  # Source: Various ERC20/721 exploits
+  # ============================================
+
+  - id: defi-fee-on-transfer-not-handled
+    message: "Transfer assumed to deliver exact amount - fails with fee-on-transfer tokens"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+    patterns:
+      - pattern: |
+          $TOKEN.transferFrom($FROM, address(this), $AMOUNT);
+          ...
+          $BALANCE = $AMOUNT
+
+  - id: defi-rebasing-token-not-handled
+    message: "Balance cached before operation - fails with rebasing tokens"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+    patterns:
+      - pattern: |
+          uint256 $BAL = $TOKEN.balanceOf(address(this));
+          ...
+          $TOKEN.transfer(...);
+          ...
+          require($TOKEN.balanceOf(address(this)) == $BAL - ..., ...)
+
+  - id: defi-permit-signature-replay
+    message: "ERC20 permit without nonce increment - signature can be replayed"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+    patterns:
+      - pattern-inside: |
+          function permit(..., bytes $SIGNATURE) {
+            ...
+          }
+      - pattern-not-inside: |
+          nonces[$OWNER]++;
+          ...
+
+  # ============================================
+  # STAKING / REWARD VULNERABILITIES
+  # ============================================
+
+  - id: defi-reward-per-token-overflow
+    message: "Reward calculation may overflow with large values"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+    pattern: |
+      rewardPerToken = rewardPerTokenStored + ($REWARD * $PRECISION / totalSupply)
+
+  - id: defi-stake-before-reward-update
+    message: "State change before reward update - user can claim excess rewards"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+    patterns:
+      - pattern-inside: |
+          function stake(...) {
+            ...
+          }
+      - pattern: |
+          balances[msg.sender] += $AMOUNT;
+          ...
+          _updateReward(msg.sender)
+
+  - id: defi-withdraw-before-reward-update
+    message: "Withdrawal before reward update - rewards may be lost"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+    patterns:
+      - pattern-inside: |
+          function withdraw(...) {
+            ...
+          }
+      - pattern: |
+          balances[msg.sender] -= $AMOUNT;
+          ...
+          _updateReward(msg.sender)
+
+  # ============================================
+  # MEV / FRONTRUNNING PATTERNS
+  # ============================================
+
+  - id: defi-commit-reveal-timing
+    message: "Commit-reveal scheme without sufficient delay - can be frontrun"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+    patterns:
+      - pattern-inside: |
+          function reveal(...) {
+            ...
+          }
+      - pattern: |
+          require(block.number > commits[$USER].block, ...)
+      - pattern-not-inside: |
+          require(block.number > commits[$USER].block + $DELAY, ...)
+
+  - id: defi-auction-frontrunnable
+    message: "Auction bid without commit-reveal - can be frontrun"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security
+    patterns:
+      - pattern-inside: |
+          function bid(...) {
+            ...
+          }
+      - pattern: |
+          require(msg.value > highestBid, ...)

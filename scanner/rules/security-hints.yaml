@@ -1,0 +1,433 @@
+rules:
+  # ============================================
+  # Security Hints & Recommendations
+  # These are INFO-level findings that guide developers
+  # toward better security practices, especially for
+  # vulnerabilities that SAST cannot fully detect.
+  # ============================================
+
+  # ============================================
+  # FUZZING RECOMMENDATIONS
+  # Flag patterns that SHOULD be fuzz tested
+  # ============================================
+
+  - id: hint-fuzz-complex-math
+    message: "Complex arithmetic detected - recommend adding fuzz tests to verify edge cases"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      recommendation: |
+        Add fuzz tests with Foundry:
+        function testFuzz_calculation(uint256 a, uint256 b) public {
+            vm.assume(a > 0 && b > 0);
+            uint256 result = contract.calculate(a, b);
+            // Add invariant assertions
+        }
+    pattern-either:
+      - pattern: $A * $B / $C
+      - pattern: $A ** $B
+      - pattern: Math.sqrt(...)
+      - pattern: Math.mulDiv(...)
+      - pattern: FullMath.mulDiv(...)
+      - pattern: $A.mul($B).div($C)
+
+  - id: hint-fuzz-token-math
+    message: "Token amount calculation - recommend fuzz testing with various decimals (6, 8, 18)"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      recommendation: "Test with USDC (6 decimals), WBTC (8 decimals), and DAI (18 decimals)"
+    patterns:
+      - pattern-either:
+          - pattern: $AMOUNT * 10 ** $DECIMALS
+          - pattern: $AMOUNT / 10 ** $DECIMALS
+          - pattern: $AMOUNT * $PRICE / $PRECISION
+
+  - id: hint-fuzz-array-operations
+    message: "Array operation in loop - recommend fuzz testing array bounds"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      recommendation: "Fuzz test with empty arrays, single element, and large arrays"
+    patterns:
+      - pattern: |
+          for (...; $I < $ARR.length; ...) {
+            ...
+            $ARR[$I]
+            ...
+          }
+
+  - id: hint-fuzz-external-input
+    message: "External input used in calculation - recommend fuzz testing input ranges"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+    patterns:
+      - pattern-inside: |
+          function $FUNC(..., uint256 $INPUT, ...) external {
+            ...
+          }
+      - pattern-either:
+          - pattern: $X * $INPUT
+          - pattern: $X / $INPUT
+          - pattern: $INPUT ** $N
+
+  # ============================================
+  # MISSING TEST COVERAGE HINTS
+  # ============================================
+
+  - id: hint-no-reentrancy-test
+    message: "External call pattern - ensure reentrancy tests exist"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      recommendation: |
+        Add reentrancy test:
+        function test_reentrancy() public {
+            ReentrantAttacker attacker = new ReentrantAttacker(target);
+            vm.expectRevert();
+            attacker.attack();
+        }
+    patterns:
+      - pattern-inside: |
+          function $FUNC(...) external {
+            ...
+          }
+      - pattern-either:
+          - pattern: $ADDR.call{value: $V}(...)
+          - pattern: $TOKEN.transfer(...)
+          - pattern: $TOKEN.safeTransfer(...)
+
+  - id: hint-no-access-control-test
+    message: "Access control modifier - ensure unauthorized access tests exist"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      recommendation: |
+        Add access control test:
+        function test_onlyOwner_revert() public {
+            vm.prank(attacker);
+            vm.expectRevert("Ownable: caller is not the owner");
+            contract.adminFunction();
+        }
+    patterns:
+      - pattern-either:
+          - pattern: |
+              function $FUNC(...) ... onlyOwner {
+                ...
+              }
+          - pattern: |
+              function $FUNC(...) ... onlyRole($ROLE) {
+                ...
+              }
+
+  # ============================================
+  # ORACLE USAGE HINTS
+  # ============================================
+
+  - id: hint-oracle-verify-freshness
+    message: "Oracle price used - verify freshness and handle stale data"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      recommendation: |
+        Always check oracle freshness:
+        require(block.timestamp - updatedAt < MAX_STALENESS, "Stale price");
+        require(price > 0, "Invalid price");
+        require(answeredInRound >= roundId, "Incomplete round");
+    patterns:
+      - pattern-either:
+          - pattern: $ORACLE.latestRoundData()
+          - pattern: $ORACLE.latestAnswer()
+          - pattern: $FEED.getPrice(...)
+
+  - id: hint-oracle-fallback
+    message: "Single oracle dependency - consider adding fallback oracle"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      recommendation: "Implement fallback to secondary oracle (e.g., Chainlink -> Uniswap TWAP)"
+    patterns:
+      - pattern-inside: |
+          function getPrice(...) {
+            ...
+          }
+      - pattern: |
+          return $ORACLE.$METHOD(...)
+      - pattern-not-inside: |
+          try ... { ... } catch { ... }
+
+  # ============================================
+  # SLIPPAGE & MEV HINTS
+  # ============================================
+
+  - id: hint-add-slippage-protection
+    message: "Token swap detected - ensure slippage protection is implemented"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      recommendation: |
+        Add minAmountOut parameter:
+        function swap(uint256 amountIn, uint256 minAmountOut) external {
+            uint256 amountOut = _swap(amountIn);
+            require(amountOut >= minAmountOut, "Slippage exceeded");
+        }
+    patterns:
+      - pattern-inside: |
+          function $SWAP(...) {
+            ...
+          }
+      - metavariable-regex:
+          metavariable: $SWAP
+          regex: "(swap|exchange|trade)"
+      - pattern-not-inside: |
+          require($OUT >= $MIN, ...);
+          ...
+
+  - id: hint-add-deadline
+    message: "Transaction without deadline - can be held by miners"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      recommendation: |
+        Add deadline parameter:
+        function swap(..., uint256 deadline) external {
+            require(block.timestamp <= deadline, "Transaction expired");
+        }
+    patterns:
+      - pattern-inside: |
+          function $FUNC(...) external {
+            ...
+          }
+      - pattern-either:
+          - pattern: $ROUTER.swap(...)
+          - pattern: $POOL.swap(...)
+      - pattern-not-inside: |
+          require(block.timestamp <= $DEADLINE, ...);
+          ...
+
+  # ============================================
+  # ADMIN FUNCTION HINTS
+  # ============================================
+
+  - id: hint-admin-timelock
+    message: "Admin function without timelock - consider adding delay for sensitive operations"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      recommendation: |
+        Add timelock for sensitive changes:
+        function scheduleChange(bytes32 id) external onlyOwner {
+            pendingChanges[id] = block.timestamp + TIMELOCK_DELAY;
+        }
+        function executeChange(bytes32 id) external {
+            require(block.timestamp >= pendingChanges[id], "Timelock");
+        }
+    patterns:
+      - pattern-inside: |
+          function $FUNC(...) ... onlyOwner {
+            ...
+          }
+      - pattern-either:
+          - pattern: $IMPL = $NEW_IMPL
+          - pattern: $ORACLE = $NEW_ORACLE
+          - pattern: $FEE = $NEW_FEE
+          - pattern: _setFee(...)
+
+  - id: hint-admin-multisig
+    message: "Single owner pattern - consider multisig for critical operations"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      recommendation: "Use Gnosis Safe or implement multi-signature requirement"
+    patterns:
+      - pattern: |
+          function $CRITICAL(...) ... onlyOwner {
+            ...
+            selfdestruct(...)
+          }
+
+  # ============================================
+  # UPGRADE SAFETY HINTS
+  # ============================================
+
+  - id: hint-upgrade-storage-gap
+    message: "Upgradeable contract - ensure storage gaps for future variables"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      recommendation: |
+        Add storage gap at end of contract:
+        uint256[50] private __gap;
+    patterns:
+      - pattern-inside: |
+          contract $NAME is ... Initializable ... {
+            ...
+          }
+      - pattern-not: |
+          uint256[$N] private __gap
+
+  - id: hint-upgrade-initializer-chain
+    message: "Inherited initializer - ensure all parent initializers are called"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      recommendation: "Call all parent __init functions in correct order"
+    patterns:
+      - pattern: |
+          function initialize(...) initializer {
+            ...
+          }
+
+  # ============================================
+  # ERC STANDARD HINTS
+  # ============================================
+
+  - id: hint-erc20-approve-race
+    message: "ERC20 approve - vulnerable to front-running race condition"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      recommendation: |
+        Use increaseAllowance/decreaseAllowance or set to 0 first:
+        token.approve(spender, 0);
+        token.approve(spender, newAmount);
+    pattern: $TOKEN.approve($SPENDER, $AMOUNT)
+
+  - id: hint-erc721-safe-transfer
+    message: "ERC721 transfer - consider using safeTransferFrom for receiver validation"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      recommendation: "safeTransferFrom checks if receiver can handle NFTs"
+    pattern: $NFT.transferFrom($FROM, $TO, $ID)
+
+  - id: hint-erc1155-batch-validation
+    message: "ERC1155 batch operation - ensure array lengths match"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+    patterns:
+      - pattern-either:
+          - pattern: safeBatchTransferFrom(..., $IDS, $AMOUNTS, ...)
+          - pattern: balanceOfBatch($ACCOUNTS, $IDS)
+      - pattern-not-inside: |
+          require($A.length == $B.length, ...);
+          ...
+
+  # ============================================
+  # GAS & DOS HINTS
+  # ============================================
+
+  - id: hint-unbounded-loop-dos
+    message: "Unbounded loop over array - potential DoS if array grows large"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      recommendation: |
+        Add pagination or limit array growth:
+        function processInBatches(uint256 start, uint256 count) external {
+            uint256 end = min(start + count, items.length);
+            for (uint256 i = start; i < end; i++) { ... }
+        }
+    patterns:
+      - pattern: |
+          for (...; $I < $ARR.length; ...) {
+            ...
+          }
+      - pattern-not-inside: |
+          require($ARR.length <= $MAX, ...);
+          ...
+
+  - id: hint-external-call-in-loop
+    message: "External call in loop - gas may exceed block limit"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      recommendation: "Consider pull-over-push pattern or batch processing"
+    patterns:
+      - pattern-inside: |
+          for (...) {
+            ...
+          }
+      - pattern-either:
+          - pattern: $TOKEN.transfer(...)
+          - pattern: $ADDR.call(...)
+
+  # ============================================
+  # INVARIANT SUGGESTIONS
+  # ============================================
+
+  - id: hint-invariant-erc20-supply
+    message: "ERC20 token - consider adding supply invariant test"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      invariant: "totalSupply() == sum of all balances"
+      test: |
+        function invariant_totalSupply() public {
+            uint256 sum = 0;
+            for (uint i = 0; i < holders.length; i++) {
+                sum += token.balanceOf(holders[i]);
+            }
+            assertEq(token.totalSupply(), sum);
+        }
+    patterns:
+      - pattern-inside: |
+          contract $NAME is ERC20 {
+            ...
+          }
+
+  - id: hint-invariant-vault-shares
+    message: "Vault contract - consider adding share/asset invariant test"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      invariant: "totalAssets >= totalSupply (no free shares)"
+      test: |
+        function invariant_noFreeShares() public {
+            assertGe(vault.totalAssets(), vault.totalSupply());
+        }
+    patterns:
+      - pattern-inside: |
+          contract $NAME is ... ERC4626 ... {
+            ...
+          }
+
+  - id: hint-invariant-amm-product
+    message: "AMM contract - consider adding constant product invariant test"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security-hint
+      invariant: "reserve0 * reserve1 >= k (after fees)"
+      test: |
+        function invariant_constantProduct() public {
+            uint256 k = amm.reserve0() * amm.reserve1();
+            assertGe(k, initialK);
+        }
+    patterns:
+      - pattern-either:
+          - pattern: reserve0 * reserve1
+          - pattern: _reserve0 * _reserve1
