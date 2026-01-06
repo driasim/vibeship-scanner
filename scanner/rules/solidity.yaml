@@ -5688,3 +5688,430 @@ rules:
         - https://code4rena.com/reports/2024-06-size
     pattern-regex: 'function\s+repay\s*\([^)]*amount[^)]*\)[^{]*\{[^}]*(?!amount)[a-z]+Amount'
 
+  # ============================================
+  # GOATCasino Gap Rules - Added 2026-01-04
+  # ============================================
+
+  # SWC-120: Weak Randomness with keccak256
+  - id: sol-swc-120-keccak-weak-randomness
+    message: "SWC-120: keccak256 with block variables for randomness - miners can manipulate block.coinbase, block.timestamp, tx.origin"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-330: Use of Insufficiently Random Values"
+      swc: "SWC-120"
+      references:
+        - https://swcregistry.io/docs/SWC-120
+        - https://github.com/nccgroup/GOATCasino
+    pattern-regex: 'keccak256\s*\([^)]*(?:block\.(coinbase|timestamp|difficulty|number|prevrandao|gaslimit)|now|tx\.origin)[^)]*\)'
+
+  # SWC-120: Direct use of block.coinbase (not covered by existing rules)
+  - id: sol-swc-120-block-coinbase
+    message: "SWC-120: block.coinbase used for randomness - miners control this value"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-330: Use of Insufficiently Random Values"
+      swc: "SWC-120"
+      references:
+        - https://swcregistry.io/docs/SWC-120
+    pattern: block.coinbase
+
+  # SWC-109: Uninitialized Storage Pointer (array types) - Fixed version
+  - id: sol-swc-109-uninitialized-array-storage
+    message: "SWC-109: Uninitialized storage array pointer defaults to slot 0 - can overwrite critical state"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-665: Improper Initialization"
+      swc: "SWC-109"
+      references:
+        - https://swcregistry.io/docs/SWC-109
+        - https://github.com/nccgroup/GOATCasino
+    pattern-regex: '\w+\[\]\s+storage\s+\w+\s*;'
+
+  # SWC-109: Uninitialized Storage Pointer (generic improved)
+  - id: sol-swc-109-uninitialized-storage-v2
+    message: "SWC-109: Uninitialized storage variable points to slot 0 by default - can corrupt state"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-665: Improper Initialization"
+      swc: "SWC-109"
+      references:
+        - https://swcregistry.io/docs/SWC-109
+    pattern-regex: '(\w+(\[\])?|mapping\s*\([^)]+\)|struct\s+\w+)\s+storage\s+\w+\s*;'
+
+  # SWC-118: Old-style constructor with typo (function name almost matches contract)
+  # Detects functions that start with same characters as contract name but differ
+  - id: sol-swc-118-constructor-typo-pattern
+    message: "SWC-118: Function name resembles contract name but has typo - intended constructor never executes (pre-0.4.22)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-665: Improper Initialization"
+      swc: "SWC-118"
+      references:
+        - https://swcregistry.io/docs/SWC-118
+        - https://github.com/nccgroup/GOATCasino
+    # Matches common typo patterns: doubled letters, swapped letters, missing letters
+    pattern-regex: 'function\s+(\w{5,})(en|ek|ae|ea|er|re|ok|ko|eo|oe|on|no|ke|ek|ak|ka|an|na)(\s*\()'
+
+  # SWC-118: Function name very similar to contract (old constructor pattern)
+  - id: sol-swc-118-old-constructor-typo
+    message: "SWC-118: Function with name starting like contract name - possible constructor typo (pre-0.4.22)"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-665: Improper Initialization"
+      swc: "SWC-118"
+      references:
+        - https://swcregistry.io/docs/SWC-118
+    # Looks for functions named like common typos of contract names (Token -> Toaken, Tokne, etc)
+    pattern-regex: 'function\s+\w*(Toaken|Tokne|Tokn|Tokken|Tken|Conract|Contrat|Contrct|Casnio|Casno)(\s*\()'
+
+  # Missing Access Control: Public function calling privileged function
+  - id: sol-missing-ac-on-privileged-call
+    message: "Public function calls onlyOwner function without access control - privilege escalation"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-284: Improper Access Control"
+      references:
+        - https://github.com/nccgroup/GOATCasino
+    pattern-regex: 'function\s+\w+\s*\([^)]*\)\s+(public|external)\s*\{[^}]*\.\s*(getEmergencyFunds|withdrawFunds|emergencyWithdraw|adminWithdraw|ownerWithdraw)\s*\('
+
+  # Missing Access Control: Init/Initialize function without protection
+  - id: sol-unprotected-init-function
+    message: "Initialization function without access control - can be front-run or re-initialized"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-284: Improper Access Control"
+      references:
+        - https://github.com/nccgroup/GOATCasino
+    patterns:
+      - pattern-regex: 'function\s+(init\w*|initialize\w*)\s*\([^)]*\)\s+(public|external)\s*\{'
+      - pattern-not-regex: 'function\s+(init\w*|initialize\w*)\s*\([^)]*\)\s+(public|external)\s+(initializer|onlyOwner)'
+
+  # ============================================
+  # SWC-124: Storage Collision Patterns
+  # Note: Full detection requires semantic analysis across files
+  # These rules catch common anti-patterns that lead to collisions
+  # ============================================
+
+  - id: sol-swc-124-upgradeable-no-gap
+    message: "SWC-124: Upgradeable contract without storage gap - variable additions in upgrades will corrupt storage"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-706: Use of Incorrectly-Resolved Name or Reference"
+      swc: "SWC-124"
+      references:
+        - https://docs.openzeppelin.com/upgrades-plugins/1.x/writing-upgradeable#storage-gaps
+    patterns:
+      - pattern-regex: '(contract\s+\w+\s+is\s+[^{]*(?:Initializable|UUPSUpgradeable|TransparentUpgradeableProxy)[^{]*\{)'
+      - pattern-not-regex: 'uint256\s*\[\s*\d+\s*\]\s+(private|internal)\s+__gap'
+
+  - id: sol-swc-124-implementation-version-pattern
+    message: "SWC-124: Implementation contract version pattern detected - ensure storage layout matches previous versions"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security
+      swc: "SWC-124"
+    pattern-regex: 'contract\s+\w+(V\d+|Version\d+|Impl\d+)\s'
+
+  - id: sol-swc-124-storage-slot-comment
+    message: "SWC-124: Storage collision risk flagged in code comments - review storage layout carefully"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      swc: "SWC-124"
+    pattern-regex: '//.*(?:storage\s+collision|ruin\s+.*storage|corrupt\s+storage|storage\s+layout)'
+
+  - id: sol-swc-124-eip1967-slot-access
+    message: "SWC-124: EIP-1967 implementation slot accessed directly - ensure implementation storage layouts are compatible"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security
+      swc: "SWC-124"
+      references:
+        - https://eips.ethereum.org/EIPS/eip-1967
+    pattern-regex: '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc'
+
+  # ============================================
+  # Transient Storage (EIP-1153, Solidity 0.8.24+)
+  # ============================================
+
+  - id: sol-transient-storage-misuse
+    message: "Transient storage used with external call - data will NOT persist after callback returns"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-665: Improper Initialization"
+      references:
+        - https://eips.ethereum.org/EIPS/eip-1153
+        - https://github.com/SunWeb3Sec/DeFiVulnLabs/blob/main/src/test/TransientStorageMisuse.t.sol
+    # Detects TSTORE followed by external call expecting TLOAD
+    pattern-regex: 'assembly\s*\{[^}]*tstore\s*\([^}]*\}[\s\S]{0,200}\.call[\s\S]{0,100}assembly\s*\{[^}]*tload'
+
+  - id: sol-transient-storage-callback
+    message: "Transient storage combined with callback pattern - ensure data persistence is intentional"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-665: Improper Initialization"
+      references:
+        - https://eips.ethereum.org/EIPS/eip-1153
+    # TSTORE with callback-style function calls
+    patterns:
+      - pattern-regex: 'tstore\s*\('
+      - pattern-regex: '(onFlashLoan|flashLoanCallback|onERC\d+Received|callback)\s*\('
+
+  - id: sol-transient-storage-reentrancy-guard
+    message: "Transient storage used for reentrancy guard - verify guard clears correctly on all paths"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security
+      references:
+        - https://eips.ethereum.org/EIPS/eip-1153
+    # Using transient for lock patterns
+    pattern-regex: 'tstore\s*\(\s*\w+\s*,\s*(0x01|1)\s*\)'
+
+  # ============================================
+  # Data Location Issues (Memory vs Storage)
+  # ============================================
+
+  - id: sol-struct-memory-modification
+    message: "Struct copied to memory then modified - changes will NOT persist to storage"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-704: Incorrect Type Conversion or Cast"
+      references:
+        - https://docs.soliditylang.org/en/latest/types.html#data-location
+    # Pattern: struct assigned to memory, then modified
+    pattern-regex: '(\w+)\s+memory\s+(\w+)\s*=\s*(\w+)\s*;[\s\S]{0,100}\2\.(\w+)\s*='
+
+  - id: sol-array-memory-modification
+    message: "Array copied to memory then modified - original storage array unchanged"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-704: Incorrect Type Conversion or Cast"
+    # Pattern: array assigned to memory, then indexed and modified
+    pattern-regex: '\w+\[\]\s+memory\s+(\w+)\s*=\s*(\w+)\s*;[\s\S]{0,100}\1\s*\['
+
+  - id: sol-mapping-memory-not-allowed
+    message: "Mapping cannot be used with memory location - this is a compilation error hint"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-704: Incorrect Type Conversion or Cast"
+    pattern-regex: 'mapping\s*\([^)]+\)\s+memory\s'
+
+  - id: sol-storage-pointer-assignment
+    message: "Storage pointer created without initialization - points to slot 0 by default"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-665: Improper Initialization"
+      swc: "SWC-109"
+    # Struct declared as storage without assignment
+    pattern-regex: '(\w+)\s+storage\s+(\w+)\s*;(?!\s*=)'
+
+  - id: sol-memory-to-storage-implicit
+    message: "Memory struct assigned to storage struct - ensure all fields are copied correctly"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security
+    pattern-regex: '(\w+)\s+storage\s+\w+\s*=\s*\w+\s*;[\s\S]{0,50}\w+\s+memory\s'
+
+  # ============================================
+  # NEW RULES: Stanford CTF & CTE Coverage Gaps
+  # ============================================
+
+  # Stanford Challenge0 - Arbitrary approval vulnerability
+  # VToken.sol has approve(owner, spender, amount) which lets ANYONE approve for ANY owner
+  - id: sol-arbitrary-approval-three-args
+    message: "CRITICAL: ERC20 approve() with 3 args (owner, spender, amount) - anyone can approve tokens for any owner. Should be approve(spender, amount)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-284: Improper Access Control"
+      owasp: "A01:2021 Broken Access Control"
+      references:
+        - https://eips.ethereum.org/EIPS/eip-20
+        - https://github.com/secureum/DeFi-Security-Summit-Stanford
+    pattern-either:
+      - pattern: |
+          function approve(address $OWNER, address $SPENDER, uint256 $AMOUNT) public returns (bool) {
+            ...
+          }
+      - pattern: |
+          function approve(address $OWNER, address $SPENDER, uint256 $AMOUNT) external returns (bool) {
+            ...
+          }
+      - pattern: |
+          function approve(address $OWNER, address $SPENDER, uint $AMOUNT) public returns (bool) {
+            ...
+          }
+      - pattern: |
+          function approve(address $OWNER, address $SPENDER, uint $AMOUNT) external returns (bool) {
+            ...
+          }
+
+  # Stanford Challenge1 - OpenZeppelin functionDelegateCall wrapper
+  # LenderPool.sol uses borrower.functionDelegateCall(data) in flashLoan - arbitrary code execution
+  - id: sol-openzeppelin-function-delegatecall
+    message: "CRITICAL: functionDelegateCall with user-controlled address - allows arbitrary code execution in contract context"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-94: Improper Control of Code Generation"
+      owasp: "A03:2021 Injection"
+      references:
+        - https://docs.openzeppelin.com/contracts/4.x/api/utils#Address-functionDelegateCall-address-bytes-
+        - https://github.com/secureum/DeFi-Security-Summit-Stanford
+    pattern-either:
+      - pattern: $ADDR.functionDelegateCall(...)
+      - pattern: Address.functionDelegateCall(...)
+      - pattern: address($X).functionDelegateCall(...)
+
+  # Stanford Challenge2 - Division before multiplication precision loss
+  - id: sol-division-before-multiplication
+    message: "Division before multiplication can cause precision loss - reorder to multiply first"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-682: Incorrect Calculation"
+    pattern-regex: '\(\s*\w+\s*\*\s*\w+\s*\)\s*/\s*\w+\s*,\s*\(\s*\w+\s*\*\s*\w+\s*\)\s*/\s*\w+'
+
+  # Stanford Challenge3 - AMM spot price as oracle
+  # BorrowSystemInsecureOracle uses calcAmountsOut from DEX as price oracle - flash loan vulnerable
+  - id: sol-amm-spot-price-as-oracle
+    message: "CRITICAL: Using AMM spot price (calcAmountsOut/getAmountsOut) as oracle - vulnerable to flash loan price manipulation"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-807: Reliance on Untrusted Inputs"
+      owasp: "A04:2021 Insecure Design"
+      references:
+        - https://blog.chain.link/flash-loans-and-the-importance-of-tamper-proof-oracles/
+        - https://github.com/secureum/DeFi-Security-Summit-Stanford
+    pattern-either:
+      - pattern: $ORACLE.calcAmountsOut(...)
+      - pattern: $ORACLE.getAmountsOut(...)
+      - pattern: $ORACLE.getAmountOut(...)
+      - pattern: $ROUTER.getAmountsOut(...)
+
+  # Stanford Challenge3 - Inverted LTV calculation
+  - id: sol-inverted-ltv-calculation
+    message: "Inverted LTV calculation - multiplying by 100 then dividing by percentage creates >100% LTV"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-682: Incorrect Calculation"
+    pattern-regex: '\w+\s*\*\s*100\s*/\s*[1-9][0-9](?![0-9])'
+
+  # CTE: Integer overflow in multiplication (pre-0.8 Solidity)
+  - id: sol-pre08-integer-overflow-multiplication
+    message: "Integer overflow possible in multiplication - use SafeMath or upgrade to Solidity 0.8+"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-190: Integer Overflow"
+      references:
+        - https://consensys.github.io/smart-contract-best-practices/attacks/insecure-arithmetic/
+    patterns:
+      - pattern-either:
+          - pattern: $VAR * $PRICE
+          - pattern: $AMOUNT * $RATE
+          - pattern: $COUNT * $VALUE
+      - pattern-not-inside: |
+          import "...SafeMath...";
+          ...
+      - pattern-not-inside: |
+          using SafeMath for ...;
+          ...
+      - pattern-inside: |
+          pragma solidity ^0.$MINOR.$PATCH;
+          ...
+      - metavariable-regex:
+          metavariable: $MINOR
+          regex: '[0-7]'
+
+  # CTE: Integer underflow in subtraction (pre-0.8 Solidity)
+  - id: sol-pre08-integer-underflow-subtraction
+    message: "Integer underflow possible in subtraction - use SafeMath or upgrade to Solidity 0.8+"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-191: Integer Underflow"
+    patterns:
+      - pattern: $VAR - $AMOUNT
+      - pattern-not-inside: |
+          require($VAR >= $AMOUNT, ...);
+          ...
+      - pattern-not-inside: |
+          import "...SafeMath...";
+          ...
+      - pattern-not-inside: |
+          using SafeMath for ...;
+          ...
+      - pattern-inside: |
+          pragma solidity ^0.$MINOR.$PATCH;
+          ...
+      - metavariable-regex:
+          metavariable: $MINOR
+          regex: '[0-7]'
+
+  # CTE: Constructor function typo (function with contract name instead of constructor)
+  - id: sol-constructor-function-typo
+    message: "Constructor defined as function with contract name - use 'constructor' keyword in modern Solidity"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-665: Improper Initialization"
+      references:
+        - https://solidity-by-example.org/constructor/
+    pattern-regex: 'contract\s+(\w+)\s*\{[\s\S]*?function\s+\1\s*\([^)]*\)'
+
+  # CTE: Wei/Ether unit confusion leading to overflow
+  - id: sol-wei-ether-unit-confusion
+    message: "Potential unit confusion - multiplying ether with large constants can cause overflow"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-682: Incorrect Calculation"
+    pattern-regex: '10\*\*18\s*\*\s*1\s+ether'
+

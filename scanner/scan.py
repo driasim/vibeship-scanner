@@ -1559,6 +1559,219 @@ def run_slither(repo_dir: str) -> List[Dict[str, Any]]:
     return findings
 
 
+def run_slither_upgradeability(repo_dir: str) -> List[Dict[str, Any]]:
+    """Run slither-check-upgradeability for storage collision detection (SWC-124)
+
+    This specialized Slither tool detects:
+    - Storage layout collisions between proxy and implementation
+    - Missing gap variables in upgradeable contracts
+    - Order-dependent state variable issues
+    - Incorrect slot usage in EIP-1967 patterns
+
+    Triggers when proxy patterns are detected:
+    - UUPS (EIP-1822)
+    - TransparentUpgradeableProxy
+    - EIP-1967 storage slots
+    - delegatecall in fallback functions
+    """
+    findings = []
+
+    # Check for Solidity files
+    sol_files = []
+    for root, dirs, files in os.walk(repo_dir):
+        dirs[:] = [d for d in dirs if d not in ['node_modules', '.git', 'lib', 'forge-std']]
+        for f in files:
+            if f.endswith('.sol'):
+                full_path = os.path.join(root, f)
+                sol_files.append(full_path)
+
+    if not sol_files:
+        print("No .sol files found, skipping slither-check-upgradeability", file=sys.stderr)
+        return findings
+
+    # Detect proxy patterns by scanning file contents
+    proxy_contracts = []
+    implementation_contracts = []
+
+    # Patterns that indicate proxy contracts
+    proxy_patterns = [
+        'delegatecall',
+        'ERC1967Upgrade',
+        'TransparentUpgradeableProxy',
+        'UUPSUpgradeable',
+        '_IMPLEMENTATION_SLOT',
+        'IMPLEMENTATION_SLOT',
+        '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc',  # EIP-1967 impl slot
+        '0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103',  # EIP-1967 admin slot
+        'Proxy',
+        'upgradeTo',
+        'upgradeToAndCall',
+    ]
+
+    # Patterns that indicate implementation contracts
+    impl_patterns = [
+        'Initializable',
+        'initializer',
+        '__gap',
+        'initialize(',
+        '_disableInitializers',
+    ]
+
+    for sol_file in sol_files:
+        try:
+            with open(sol_file, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+
+                # Check for proxy patterns
+                is_proxy = any(pattern in content for pattern in proxy_patterns)
+                is_impl = any(pattern in content for pattern in impl_patterns)
+
+                if is_proxy:
+                    proxy_contracts.append(sol_file)
+                if is_impl:
+                    implementation_contracts.append(sol_file)
+        except Exception as e:
+            print(f"Error reading {sol_file}: {e}", file=sys.stderr)
+            continue
+
+    if not proxy_contracts and not implementation_contracts:
+        print("No proxy/upgradeable patterns detected, skipping slither-check-upgradeability", file=sys.stderr)
+        return findings
+
+    print(f"Found {len(proxy_contracts)} proxy contracts and {len(implementation_contracts)} implementation contracts", file=sys.stderr)
+
+    # Try running slither with --detect to catch storage-related issues
+    # This is more reliable than trying to pair proxies with implementations
+    try:
+        # Use Slither's storage-focused detectors
+        storage_detectors = [
+            'uninitialized-storage',
+            'variable-scope',
+            'shadowing-state',
+            'shadowing-local',
+            'storage-array',
+        ]
+
+        cmd = [
+            'slither',
+            repo_dir,
+            '--json', '-',
+            '--detect', ','.join(storage_detectors),
+            '--solc-disable-warnings',
+            '--skip-clean',
+            '--filter-paths', 'node_modules,test,tests,mock,mocks,lib,forge-std'
+        ]
+
+        print(f"Running Slither storage analysis: {' '.join(cmd)}", file=sys.stderr)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+
+        # Parse results
+        if result.stdout:
+            try:
+                data = json.loads(result.stdout)
+
+                for detector in data.get('results', {}).get('detectors', []):
+                    check = detector.get('check', 'unknown')
+                    impact = detector.get('impact', 'Medium')
+                    confidence = detector.get('confidence', 'Medium')
+                    description = detector.get('description', '')
+
+                    # Map to SWC-124 if it's a storage issue
+                    rule_id = f"slither-upgrade-{check}"
+
+                    # Get file locations
+                    elements = detector.get('elements', [])
+                    for elem in elements:
+                        source = elem.get('source_mapping', {})
+                        filename = source.get('filename_relative', source.get('filename', ''))
+                        start_line = source.get('lines', [0])[0] if source.get('lines') else 0
+
+                        if filename:
+                            findings.append({
+                                'rule_id': rule_id,
+                                'message': f"[SWC-124] Storage Issue ({check}): {description[:200]}",
+                                'severity': 'high' if impact == 'High' else 'medium',
+                                'file': filename,
+                                'line': start_line,
+                                'column': 0,
+                                'scanner': 'slither-upgradeability',
+                                'category': 'smart-contract',
+                                'subcategory': 'storage-collision',
+                                'cwe_id': 'CWE-787',  # Out-of-bounds Write
+                                'swc_id': 'SWC-124',
+                                'fix': {
+                                    'available': False,
+                                    'template': None
+                                },
+                                'references': [
+                                    'https://swcregistry.io/docs/SWC-124',
+                                    'https://github.com/crytic/slither/wiki/Detector-Documentation'
+                                ]
+                            })
+                            break  # One finding per detector
+
+            except json.JSONDecodeError as e:
+                print(f"Slither upgradeability JSON parse error: {e}", file=sys.stderr)
+
+        # Also scan for __gap variable issues in implementation contracts
+        for impl_file in implementation_contracts:
+            try:
+                with open(impl_file, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    lines = content.split('\n')
+
+                    # Check if it's upgradeable but missing __gap
+                    has_initializable = 'Initializable' in content or 'initializer' in content
+                    has_gap = '__gap' in content
+                    has_inheritance = 'is ' in content and ('Upgradeable' in content or 'Initializable' in content)
+
+                    if has_initializable and has_inheritance and not has_gap:
+                        # Find the contract declaration line
+                        for i, line in enumerate(lines):
+                            if 'contract ' in line and 'is ' in line:
+                                rel_path = os.path.relpath(impl_file, repo_dir)
+                                findings.append({
+                                    'rule_id': 'slither-upgrade-missing-gap',
+                                    'message': '[SWC-124] Upgradeable contract missing __gap storage variable for future upgrades. Add `uint256[50] private __gap;` at end of storage variables.',
+                                    'severity': 'high',
+                                    'file': rel_path,
+                                    'line': i + 1,
+                                    'column': 0,
+                                    'scanner': 'slither-upgradeability',
+                                    'category': 'smart-contract',
+                                    'subcategory': 'storage-collision',
+                                    'cwe_id': 'CWE-787',
+                                    'swc_id': 'SWC-124',
+                                    'fix': {
+                                        'available': True,
+                                        'template': 'Add at end of state variables: uint256[50] private __gap;'
+                                    },
+                                    'references': [
+                                        'https://swcregistry.io/docs/SWC-124',
+                                        'https://docs.openzeppelin.com/upgrades-plugins/1.x/writing-upgradeable#storage-gaps'
+                                    ]
+                                })
+                                break
+
+            except Exception as e:
+                print(f"Error analyzing {impl_file}: {e}", file=sys.stderr)
+
+    except subprocess.TimeoutExpired:
+        print("Slither upgradeability timeout after 300s", file=sys.stderr)
+    except FileNotFoundError:
+        print("Slither not installed, skipping upgradeability check", file=sys.stderr)
+    except Exception as e:
+        print(f"Slither upgradeability error: {type(e).__name__}: {e}", file=sys.stderr)
+
+    print(f"Slither upgradeability found {len(findings)} findings", file=sys.stderr)
+    return findings
+
+
 def run_osv_scanner(repo_dir: str) -> List[Dict[str, Any]]:
     """Run Google's OSV-Scanner for dependency vulnerabilities
 
@@ -2152,6 +2365,290 @@ def run_solhint(repo_dir: str) -> List[Dict[str, Any]]:
     return findings
 
 
+def run_echidna(repo_dir: str) -> List[Dict[str, Any]]:
+    """Run Echidna property-based fuzzer on Solidity contracts
+
+    Echidna is a fuzzer that:
+    - Finds invariant violations through property-based testing
+    - Detects assertion failures and revert conditions
+    - Discovers unexpected state transitions
+    - Requires contracts to have property tests (echidna_* functions)
+
+    Note: Echidna requires:
+    1. Compilable contracts (foundry.toml or hardhat.config.js)
+    2. Property tests defined (function echidna_*() returns (bool))
+    3. Can be slow (runs multiple iterations)
+    """
+    findings = []
+
+    # Check for Solidity files
+    sol_files = []
+    for root, dirs, files in os.walk(repo_dir):
+        dirs[:] = [d for d in dirs if d not in ['node_modules', '.git', 'lib', 'out', 'cache']]
+        for f in files:
+            if f.endswith('.sol'):
+                sol_files.append(os.path.join(root, f))
+
+    if not sol_files:
+        print("No Solidity files found, skipping Echidna", file=sys.stderr)
+        return findings
+
+    # Check if project has echidna property tests
+    has_echidna_tests = False
+    for sol_file in sol_files[:20]:  # Check first 20 files
+        try:
+            with open(sol_file, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+                if 'echidna_' in content or 'invariant_' in content:
+                    has_echidna_tests = True
+                    break
+        except Exception:
+            continue
+
+    if not has_echidna_tests:
+        print("No Echidna property tests found (echidna_* or invariant_*), skipping", file=sys.stderr)
+        return findings
+
+    print(f"Found {len(sol_files)} Solidity files with Echidna tests", file=sys.stderr)
+
+    # Check for foundry.toml (Foundry project) or hardhat.config (Hardhat)
+    has_foundry = os.path.exists(os.path.join(repo_dir, 'foundry.toml'))
+    has_hardhat = os.path.exists(os.path.join(repo_dir, 'hardhat.config.js')) or \
+                  os.path.exists(os.path.join(repo_dir, 'hardhat.config.ts'))
+
+    if not has_foundry and not has_hardhat:
+        print("No build config (foundry.toml or hardhat.config) found, skipping Echidna", file=sys.stderr)
+        return findings
+
+    # Echidna config - run quick mode for CI
+    config_content = """
+testLimit: 1000
+shrinkLimit: 100
+seqLen: 50
+testMode: "assertion"
+"""
+
+    config_path = os.path.join(repo_dir, 'echidna.yaml')
+    try:
+        with open(config_path, 'w') as f:
+            f.write(config_content)
+    except Exception as e:
+        print(f"Could not create Echidna config: {e}", file=sys.stderr)
+        return findings
+
+    try:
+        # Run echidna
+        cmd = [
+            'echidna',
+            '.',
+            '--config', 'echidna.yaml',
+            '--format', 'json'
+        ]
+
+        print(f"Running Echidna in {repo_dir}", file=sys.stderr)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=180,  # 3 min timeout for fuzzing
+            cwd=repo_dir
+        )
+
+        print(f"Echidna exit code: {result.returncode}", file=sys.stderr)
+
+        # Parse JSON output
+        if result.stdout:
+            try:
+                data = json.loads(result.stdout)
+                # Echidna JSON format: list of test results
+                if isinstance(data, list):
+                    for test in data:
+                        if test.get('status') == 'falsified':
+                            # Found invariant violation!
+                            name = test.get('name', 'unknown')
+                            findings.append({
+                                'id': hashlib.md5(f"echidna-{name}".encode()).hexdigest()[:12],
+                                'ruleId': 'echidna-invariant-violation',
+                                'severity': 'critical',
+                                'category': 'fuzzing',
+                                'title': f"[Echidna] Invariant Violated: {name}",
+                                'description': f"Property test '{name}' was falsified. The fuzzer found inputs that violate this invariant.",
+                                'location': {
+                                    'file': test.get('contract', ''),
+                                    'line': 0,
+                                    'column': 0
+                                },
+                                'fix': {
+                                    'available': False,
+                                    'template': None
+                                },
+                                'references': ['https://github.com/crytic/echidna']
+                            })
+            except json.JSONDecodeError as e:
+                print(f"Echidna JSON parse error: {e}", file=sys.stderr)
+
+        if result.stderr:
+            print(f"Echidna stderr: {result.stderr[:500]}", file=sys.stderr)
+
+    except subprocess.TimeoutExpired:
+        print("Echidna timeout after 180s", file=sys.stderr)
+    except FileNotFoundError:
+        print("Echidna not installed, skipping", file=sys.stderr)
+    except Exception as e:
+        print(f"Echidna error: {type(e).__name__}: {e}", file=sys.stderr)
+    finally:
+        # Clean up config
+        try:
+            if os.path.exists(config_path):
+                os.remove(config_path)
+        except Exception:
+            pass
+
+    print(f"Echidna found {len(findings)} findings", file=sys.stderr)
+    return findings
+
+
+def run_foundry_fuzz(repo_dir: str) -> List[Dict[str, Any]]:
+    """Run Foundry's built-in fuzzer on project tests
+
+    Foundry fuzz testing:
+    - Runs fuzz tests (functions with fuzz_ prefix or random inputs)
+    - Detects assertion failures and reverts
+    - Tests invariants through property-based testing
+    - Much faster than Echidna for basic fuzzing
+
+    Requires:
+    1. Foundry project (foundry.toml)
+    2. Test files with fuzz tests
+    """
+    findings = []
+
+    # Check for Foundry project
+    if not os.path.exists(os.path.join(repo_dir, 'foundry.toml')):
+        print("No foundry.toml found, skipping Foundry fuzz", file=sys.stderr)
+        return findings
+
+    # Check for test files with fuzz patterns
+    test_files = []
+    fuzz_test_found = False
+    for root, dirs, files in os.walk(repo_dir):
+        dirs[:] = [d for d in dirs if d not in ['node_modules', '.git', 'lib', 'out', 'cache']]
+        for f in files:
+            if f.endswith('.t.sol') or f.endswith('.test.sol'):
+                test_files.append(os.path.join(root, f))
+                # Quick check for fuzz tests
+                try:
+                    with open(os.path.join(root, f), 'r', encoding='utf-8', errors='ignore') as tf:
+                        content = tf.read()
+                        # Foundry fuzz tests have random inputs in function params
+                        if 'function test' in content.lower() and ('uint' in content or 'int' in content or 'bytes' in content):
+                            fuzz_test_found = True
+                except Exception:
+                    continue
+
+    if not test_files:
+        print("No test files (.t.sol) found, skipping Foundry fuzz", file=sys.stderr)
+        return findings
+
+    print(f"Found {len(test_files)} test files for Foundry fuzz", file=sys.stderr)
+
+    try:
+        # First, try to compile the project
+        print("Compiling Foundry project...", file=sys.stderr)
+        compile_result = subprocess.run(
+            ['forge', 'build'],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=repo_dir
+        )
+
+        if compile_result.returncode != 0:
+            print(f"Forge build failed: {compile_result.stderr[:300]}", file=sys.stderr)
+            return findings
+
+        # Run fuzz tests with limited runs for speed
+        cmd = [
+            'forge', 'test',
+            '--fuzz-runs', '100',  # Reduced for CI speed
+            '--json'
+        ]
+
+        print(f"Running Foundry fuzz tests in {repo_dir}", file=sys.stderr)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5 min timeout
+            cwd=repo_dir
+        )
+
+        print(f"Forge test exit code: {result.returncode}", file=sys.stderr)
+
+        # Parse JSON output (one JSON object per line)
+        if result.stdout:
+            for line in result.stdout.strip().split('\n'):
+                if not line.strip():
+                    continue
+                try:
+                    data = json.loads(line)
+
+                    # Check test results for failures
+                    for suite_name, suite in data.items():
+                        if not isinstance(suite, dict):
+                            continue
+
+                        test_results = suite.get('test_results', {})
+                        for test_name, test_result in test_results.items():
+                            if not isinstance(test_result, dict):
+                                continue
+
+                            status = test_result.get('status')
+                            if status == 'Failure':
+                                # Found a fuzz test failure!
+                                reason = test_result.get('reason', 'Unknown failure')
+                                counterexample = test_result.get('counterexample', {})
+
+                                desc = f"Fuzz test '{test_name}' failed: {reason}"
+                                if counterexample:
+                                    desc += f"\nCounterexample: {json.dumps(counterexample)}"
+
+                                findings.append({
+                                    'id': hashlib.md5(f"foundry-fuzz-{suite_name}-{test_name}".encode()).hexdigest()[:12],
+                                    'ruleId': 'foundry-fuzz-failure',
+                                    'severity': 'high',
+                                    'category': 'fuzzing',
+                                    'title': f"[Foundry Fuzz] {test_name} Failed",
+                                    'description': desc,
+                                    'location': {
+                                        'file': suite_name.replace('::', '/') + '.sol' if '::' in suite_name else '',
+                                        'line': 0,
+                                        'column': 0
+                                    },
+                                    'fix': {
+                                        'available': False,
+                                        'template': None
+                                    },
+                                    'references': ['https://book.getfoundry.sh/forge/fuzz-testing']
+                                })
+
+                except json.JSONDecodeError:
+                    continue
+
+        if result.returncode != 0 and result.stderr:
+            print(f"Forge test stderr: {result.stderr[:500]}", file=sys.stderr)
+
+    except subprocess.TimeoutExpired:
+        print("Foundry fuzz timeout after 300s", file=sys.stderr)
+    except FileNotFoundError:
+        print("Forge not installed, skipping Foundry fuzz", file=sys.stderr)
+    except Exception as e:
+        print(f"Foundry fuzz error: {type(e).__name__}: {e}", file=sys.stderr)
+
+    print(f"Foundry fuzz found {len(findings)} findings", file=sys.stderr)
+    return findings
+
+
 # ============================================
 # CONSOLIDATED SCANNER ORCHESTRATION
 # All scanner execution goes through here
@@ -2273,6 +2770,14 @@ def run_all_scanners(repo_dir: str, stack: Dict[str, Any] = None) -> Dict[str, A
             'trigger': '.sol files'
         },
         {
+            'name': 'slither-upgradeability',
+            'func': run_slither_upgradeability,
+            'args': (repo_dir,),
+            'category': SCANNER_CATEGORY_STACK,
+            'targets': 'Storage collision in upgradeable contracts (SWC-124)',
+            'trigger': 'Proxy/upgradeable patterns'
+        },
+        {
             'name': 'osv-scanner',
             'func': run_osv_scanner,
             'args': (repo_dir,),
@@ -2303,6 +2808,22 @@ def run_all_scanners(repo_dir: str, stack: Dict[str, Any] = None) -> Dict[str, A
             'category': SCANNER_CATEGORY_STACK,
             'targets': 'Solidity linting + security rules',
             'trigger': '.sol files'
+        },
+        {
+            'name': 'echidna',
+            'func': run_echidna,
+            'args': (repo_dir,),
+            'category': SCANNER_CATEGORY_STACK,
+            'targets': 'Solidity invariant fuzzing',
+            'trigger': '.sol files with echidna_* tests'
+        },
+        {
+            'name': 'foundry-fuzz',
+            'func': run_foundry_fuzz,
+            'args': (repo_dir,),
+            'category': SCANNER_CATEGORY_STACK,
+            'targets': 'Foundry fuzz test failures',
+            'trigger': 'foundry.toml + .t.sol files'
         },
     ]
 

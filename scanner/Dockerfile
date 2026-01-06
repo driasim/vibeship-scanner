@@ -92,6 +92,17 @@ RUN curl -L https://foundry.paradigm.xyz | bash \
 # ============================================
 RUN npm install -g solhint
 
+# ============================================
+# TOOL #15: Echidna - Solidity Property-Based Fuzzer
+# Finds invariant violations through fuzzing
+# Requires: slither (already installed), crytic-compile
+# ============================================
+RUN pip install crytic-compile \
+    && curl -fsSL https://github.com/crytic/echidna/releases/download/v2.2.5/echidna-2.2.5-x86_64-linux.tar.gz -o /tmp/echidna.tar.gz \
+    && tar -xzf /tmp/echidna.tar.gz -C /usr/local/bin \
+    && chmod +x /usr/local/bin/echidna \
+    && rm /tmp/echidna.tar.gz
+
 # Install Opengrep (LGPL fork of Semgrep - avoids commercial licensing issues)
 RUN curl -fsSL https://raw.githubusercontent.com/opengrep/opengrep/main/install.sh | bash \
     && ln -s ~/.opengrep/cli/latest/opengrep /usr/local/bin/opengrep
