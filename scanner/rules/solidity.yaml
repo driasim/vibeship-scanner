@@ -98,6 +98,7 @@ rules:
           - pattern: '$ADDR.call{value:$V}($DATA)'
 
   # NEW: Enhanced arbitrary call detection (CallMeMaybe pattern)
+  # Detects when both address AND calldata are function parameters (user-controlled)
   - id: sol-arbitrary-call-user-controlled
     message: "User-controlled address and calldata in low-level call - can call any function on any contract (CallMeMaybe pattern)"
     languages: [solidity]
@@ -107,50 +108,74 @@ rules:
       cwe: "CWE-20: Improper Input Validation"
       references:
         - https://github.com/marjon-call/SmartSecRiddles/blob/main/write_ups/2_CallMeMaybe.md
-    patterns:
-      - pattern-either:
-          # bytes memory first, then address
-          - pattern-inside: |
-              function $F(..., bytes memory $DATA, ..., address $ADDR, ...) external { ... }
-          - pattern-inside: |
-              function $F(..., bytes memory $DATA, ..., address $ADDR, ...) public { ... }
-          # bytes calldata first, then address
-          - pattern-inside: |
-              function $F(..., bytes calldata $DATA, ..., address $ADDR, ...) external { ... }
-          - pattern-inside: |
-              function $F(..., bytes calldata $DATA, ..., address $ADDR, ...) public { ... }
-          # address first, bytes memory second
-          - pattern-inside: |
-              function $F(..., address $ADDR, ..., bytes memory $DATA, ...) external { ... }
-          - pattern-inside: |
-              function $F(..., address $ADDR, ..., bytes memory $DATA, ...) public { ... }
-      - pattern-either:
-          - pattern: $ADDR.call($DATA)
-          - pattern: '$ADDR.call{value:$V}($DATA)'
-          - pattern: $ADDR.call{...}($DATA)
+    pattern-either:
+      # bytes memory + address parameter, call with both
+      - pattern: |
+          function $F(..., bytes memory $DATA, ..., address $ADDR, ...) external {
+            ...
+            $ADDR.call($DATA);
+            ...
+          }
+      - pattern: |
+          function $F(..., bytes memory $DATA, ..., address $ADDR, ...) public {
+            ...
+            $ADDR.call($DATA);
+            ...
+          }
+      - pattern: |
+          function $F(..., address $ADDR, ..., bytes memory $DATA, ...) external {
+            ...
+            $ADDR.call($DATA);
+            ...
+          }
+      - pattern: |
+          function $F(..., address $ADDR, ..., bytes memory $DATA, ...) public {
+            ...
+            $ADDR.call($DATA);
+            ...
+          }
+      # bytes calldata variants
+      - pattern: |
+          function $F(..., bytes calldata $DATA, ..., address $ADDR, ...) external {
+            ...
+            $ADDR.call($DATA);
+            ...
+          }
+      - pattern: |
+          function $F(..., address $ADDR, ..., bytes calldata $DATA, ...) external {
+            ...
+            $ADDR.call($DATA);
+            ...
+          }
 
-  # NEW: Generic unchecked external call with user data
-  - id: sol-unchecked-external-call
-    message: "Low-level call to address parameter without validation - verify target is trusted"
+  # Generic: Any .call() to an address that came from function parameter
+  - id: sol-unchecked-external-call-param
+    message: "Low-level call to address parameter - verify target is trusted before calling"
     languages: [solidity]
     severity: WARNING
     metadata:
       category: security
       cwe: "CWE-20: Improper Input Validation"
     patterns:
-      - pattern-inside: |
-          function $F(..., address $TARGET, ...) $VISIBILITY {
-            ...
-          }
       - pattern-either:
-          - pattern: $TARGET.call(...)
-          - pattern: $TARGET.call{...}(...)
-      - pattern-not-inside: |
-          require($TARGET == $TRUSTED, ...);
-          ...
-      - pattern-not-inside: |
-          if ($TARGET != $TRUSTED) revert(...);
-          ...
+          - pattern: |
+              function $F(..., address $TARGET, ...) external {
+                ...
+                $TARGET.call(...);
+                ...
+              }
+          - pattern: |
+              function $F(..., address $TARGET, ...) public {
+                ...
+                $TARGET.call(...);
+                ...
+              }
+          - pattern: |
+              function $F(..., address $TARGET, ...) internal {
+                ...
+                $TARGET.call(...);
+                ...
+              }
 
   - id: sol-delegatecall-to-arbitrary-address
     message: Delegatecall to user-controlled address - attacker can execute arbitrary code in contract context
