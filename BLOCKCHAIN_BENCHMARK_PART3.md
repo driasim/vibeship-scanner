@@ -6,22 +6,24 @@ Building on Part 1 (25 repos) and Part 2 (20 repos), this benchmark adds newly d
 
 | Rule ID | Pattern | Based On | Findings |
 |---------|---------|----------|----------|
-| `sol-division-before-multiplication` | Precision loss | DFX Finance | TBD |
-| `sol-rounding-error-zero-mint` | Zero-cost minting | DFX Finance | TBD |
-| `sol-missing-zero-amount-check` | Missing validation | DFX Finance | 1+ |
-| `sol-missing-trusted-forwarder-check` | Meta-tx spoofing | Enzyme Finance | TBD |
-| `sol-erc2771-without-trusted-check` | ERC2771 bypass | Enzyme Finance | TBD |
-| `sol-balance-in-calculation` | Balance manipulation | Yield Protocol | TBD |
-| `sol-current-balance-vs-cached` | Donation attack | Yield Protocol | **23+** |
-| `sol-lp-share-calculation-manipulation` | LP share inflation | General | TBD |
-| `sol-utilization-rate-unbounded` | Interest manipulation | Silo Finance | **3+** |
-| `sol-uint256-to-uint128-truncation` | Integer truncation | Moonbeam | TBD |
+| `sol-division-before-multiplication` | Precision loss | DFX Finance | **2** |
+| `sol-rounding-error-zero-mint` | Zero-cost minting | DFX Finance | 0 |
+| `sol-missing-zero-amount-check` | Missing validation | DFX Finance | **14** |
+| `sol-missing-trusted-forwarder-check` | Meta-tx spoofing | Enzyme Finance | 0 |
+| `sol-erc2771-without-trusted-check` | ERC2771 bypass | Enzyme Finance | 0 |
+| `sol-balance-in-calculation` | Balance manipulation | Yield Protocol | 0 |
+| `sol-current-balance-vs-cached` | Donation attack | Yield Protocol | **106+** |
+| `sol-lp-share-calculation-manipulation` | LP share inflation | General | 0 |
+| `sol-utilization-rate-unbounded` | Interest manipulation | Silo Finance | **14+** |
+| `sol-uint256-to-uint128-truncation` | Integer truncation | Moonbeam | **11** |
+| `sol-arbitrary-call-user-controlled` | Arbitrary call (CallMeMaybe) | SmartSecRiddles | **NEW** |
+| `sol-unchecked-external-call` | Generic external call | General | **NEW** |
 
 ## Scanning Progress Tracker
 
 | # | Repository | Type | Status | Scan ID | Findings | Key Detections |
 |---|------------|------|--------|---------|----------|----------------|
-| 1 | [minaminao/ctf-blockchain](https://github.com/minaminao/ctf-blockchain) | 200+ CTF Challenges | 🔄 Scanning | `d91ab548` | - | - |
+| 1 | [minaminao/ctf-blockchain](https://github.com/minaminao/ctf-blockchain) | 200+ CTF Challenges | ✅ Scanned | `d91ab548` | **11,523** | balance-vs-cached (85), truncation (11), utilization (11) |
 | 2 | [marjon-call/SmartSecRiddles](https://github.com/marjon-call/SmartSecRiddles) | Real-world Patterns | ✅ Scanned | `c77e22e1` | **545** | balance-vs-cached (4), utilization-unbounded (3) |
 | 3 | [hknio/anniversary-ctf](https://github.com/hknio/anniversary-ctf) | Hacken 2024 | ✅ **VERIFIED** | `868664ef` | **103** | **7/7 vulns (100%)** |
 
@@ -123,24 +125,24 @@ This is Hacken's 7th anniversary multi-step exploit CTF. The challenge requires 
 |------|-------|---------------|---------|-----|----------------|
 | Part 1 | 25 | 15 | 5 | 5 | ~10,000 |
 | Part 2 | 20 | 6 | 4 | 10 | ~32,000 |
-| Part 3 | 3+ | **1** | 1+ | 0 | ~650+ |
-| **Total** | **48+** | **22** | **10+** | **15** | **~42,650+** |
+| Part 3 | 3 | **1** | 2 | 0 | **~12,200** |
+| **Total** | **48** | **22** | **11** | **15** | **~54,200** |
 
 ### Part 3 Summary
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
-║  PART 3 BENCHMARK STATUS                                     ║
+║  PART 3 BENCHMARK STATUS - COMPLETE                          ║
 ╠══════════════════════════════════════════════════════════════╣
 ║  ✅ VERIFIED (100% SAST): 1 repo                             ║
 ║     • anniversary-ctf: 7/7 vulns detected                    ║
 ║  ─────────────────────────────────────────────────────────── ║
 ║  ✅ Analyzed (50% SAST by design): 1 repo                    ║
 ║     • SmartSecRiddles: 4/8 SAST-detectable, 4/8 semantic     ║
-║       (deliberate mix of SAST + non-SAST vulnerabilities)    ║
 ║  ─────────────────────────────────────────────────────────── ║
-║  🔄 In Progress: 1 repo                                      ║
-║     • ctf-blockchain: 200+ challenges (scanning)             ║
+║  ✅ Scanned (Comprehensive): 1 repo                          ║
+║     • ctf-blockchain: 11,523 findings from 200+ challenges   ║
+║       - balance-vs-cached: 85, truncation: 11, utilization: 11║
 ╚══════════════════════════════════════════════════════════════╝
 ```
 

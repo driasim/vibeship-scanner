@@ -97,6 +97,61 @@ rules:
           - pattern: $ADDR.call($DATA)
           - pattern: '$ADDR.call{value:$V}($DATA)'
 
+  # NEW: Enhanced arbitrary call detection (CallMeMaybe pattern)
+  - id: sol-arbitrary-call-user-controlled
+    message: "User-controlled address and calldata in low-level call - can call any function on any contract (CallMeMaybe pattern)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-20: Improper Input Validation"
+      references:
+        - https://github.com/marjon-call/SmartSecRiddles/blob/main/write_ups/2_CallMeMaybe.md
+    patterns:
+      - pattern-either:
+          # bytes memory first, then address
+          - pattern-inside: |
+              function $F(..., bytes memory $DATA, ..., address $ADDR, ...) external { ... }
+          - pattern-inside: |
+              function $F(..., bytes memory $DATA, ..., address $ADDR, ...) public { ... }
+          # bytes calldata first, then address
+          - pattern-inside: |
+              function $F(..., bytes calldata $DATA, ..., address $ADDR, ...) external { ... }
+          - pattern-inside: |
+              function $F(..., bytes calldata $DATA, ..., address $ADDR, ...) public { ... }
+          # address first, bytes memory second
+          - pattern-inside: |
+              function $F(..., address $ADDR, ..., bytes memory $DATA, ...) external { ... }
+          - pattern-inside: |
+              function $F(..., address $ADDR, ..., bytes memory $DATA, ...) public { ... }
+      - pattern-either:
+          - pattern: $ADDR.call($DATA)
+          - pattern: '$ADDR.call{value:$V}($DATA)'
+          - pattern: $ADDR.call{...}($DATA)
+
+  # NEW: Generic unchecked external call with user data
+  - id: sol-unchecked-external-call
+    message: "Low-level call to address parameter without validation - verify target is trusted"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-20: Improper Input Validation"
+    patterns:
+      - pattern-inside: |
+          function $F(..., address $TARGET, ...) $VISIBILITY {
+            ...
+          }
+      - pattern-either:
+          - pattern: $TARGET.call(...)
+          - pattern: $TARGET.call{...}(...)
+      - pattern-not-inside: |
+          require($TARGET == $TRUSTED, ...);
+          ...
+      - pattern-not-inside: |
+          if ($TARGET != $TRUSTED) revert(...);
+          ...
+
   - id: sol-delegatecall-to-arbitrary-address
     message: Delegatecall to user-controlled address - attacker can execute arbitrary code in contract context
     languages: [solidity]
