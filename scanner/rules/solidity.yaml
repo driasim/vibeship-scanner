@@ -6115,3 +6115,229 @@ rules:
       cwe: "CWE-682: Incorrect Calculation"
     pattern-regex: '10\*\*18\s*\*\s*1\s+ether'
 
+  # ============================================
+  # NEW: Rounding and Precision Errors
+  # ============================================
+
+  - id: sol-division-before-multiplication
+    message: "Division before multiplication causes precision loss - multiply first, then divide (DFX Finance pattern)"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-682: Incorrect Calculation"
+      references:
+        - https://medium.com/immunefi/dfx-finance-rounding-error-bugfix-review-17ba5ffb4114
+    patterns:
+      - pattern-either:
+          - pattern: ($A / $B) * $C
+          - pattern: $X = $A / $B; ... ; $Y = $X * $C
+      - pattern-not-inside: |
+          // @audit division-before-multiplication
+          ...
+
+  - id: sol-rounding-error-zero-mint
+    message: "Integer division can round to zero - allowing free minting or zero-cost operations"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-682: Incorrect Calculation"
+      references:
+        - https://medium.com/immunefi/dfx-finance-rounding-error-bugfix-review-17ba5ffb4114
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $SHARES = $AMOUNT / $DENOMINATOR;
+              ...
+              _mint($TO, $SHARES)
+          - pattern: |
+              $SHARES = $AMOUNT * $NUMERATOR / $DENOMINATOR;
+              ...
+              _mint($TO, $SHARES)
+      - pattern-not-inside: |
+          require($SHARES > 0, ...);
+          ...
+
+  - id: sol-missing-zero-amount-check
+    message: "Transfer without zero amount check - can allow zero-value transactions to mint shares or bypass logic"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-20: Improper Input Validation"
+    patterns:
+      - pattern-either:
+          - pattern: |
+              function $FUNC(..., uint256 $AMOUNT, ...) {
+                ...
+                _mint(..., $SHARES)
+                ...
+              }
+          - pattern: |
+              function $FUNC(..., uint256 $AMOUNT, ...) {
+                ...
+                transfer(..., $AMOUNT)
+                ...
+              }
+      - pattern-not-inside: |
+          require($AMOUNT > 0, ...);
+          ...
+      - pattern-not-inside: |
+          if ($AMOUNT == 0) revert ...;
+          ...
+
+  # ============================================
+  # NEW: Trusted Forwarder / Meta-Transactions
+  # ============================================
+
+  - id: sol-missing-trusted-forwarder-check
+    message: "Meta-transaction forwarder without validation - anyone can spoof msg.sender (Enzyme Finance pattern)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-284: Improper Access Control"
+      references:
+        - https://medium.com/immunefi/enzyme-finance-missing-privilege-check-bugfix-review-8c4e8e7d4b47
+    patterns:
+      - pattern-either:
+          - pattern: |
+              function $FUNC(...) {
+                ...
+                address $SENDER = _msgSender();
+                ...
+              }
+          - pattern: |
+              function _msgSender() internal view returns (address) {
+                ...
+                return abi.decode($DATA, (address));
+              }
+      - pattern-not-inside: |
+          require(isTrustedForwarder(msg.sender), ...);
+          ...
+      - pattern-not-inside: |
+          if (!isTrustedForwarder(msg.sender)) { ... }
+          ...
+
+  - id: sol-erc2771-without-trusted-check
+    message: "ERC2771 _msgSender() used without trustedForwarder validation - meta-tx spoofing possible"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-284: Improper Access Control"
+    pattern-regex: 'function\s+_msgSender\s*\([^)]*\)[^{]*\{[^}]*msg\.data\.length\s*>=\s*20[^}]*\}'
+
+  # ============================================
+  # NEW: Balance Manipulation Vulnerabilities
+  # ============================================
+
+  - id: sol-balance-in-calculation
+    message: "Using balanceOf(address(this)) in calculations - can be manipulated by sending tokens directly"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-682: Incorrect Calculation"
+      references:
+        - https://medium.com/immunefi/yield-protocol-logic-error-bugfix-review-7b86741e6f50
+    patterns:
+      - pattern-either:
+          - pattern: $TOKEN.balanceOf(address(this)) * $X
+          - pattern: $X * $TOKEN.balanceOf(address(this))
+          - pattern: $TOKEN.balanceOf(address(this)) / $X
+          - pattern: $X / $TOKEN.balanceOf(address(this))
+          - pattern: |
+              $BAL = $TOKEN.balanceOf(address(this));
+              ...
+              $RESULT = $BAL * $MULTIPLIER
+          - pattern: |
+              $BAL = $TOKEN.balanceOf(address(this));
+              ...
+              $RESULT = $BAL / $DIVISOR
+
+  - id: sol-current-balance-vs-cached
+    message: "Using current balance instead of cached value - vulnerable to donation/flash loan attacks (Yield Protocol pattern)"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-682: Incorrect Calculation"
+      references:
+        - https://medium.com/immunefi/yield-protocol-logic-error-bugfix-review-7b86741e6f50
+    patterns:
+      - pattern-inside: |
+          function $BURN(...) {
+            ...
+          }
+      - pattern-either:
+          - pattern: $TOKEN.balanceOf(address(this))
+          - pattern: address(this).balance
+
+  - id: sol-lp-share-calculation-manipulation
+    message: "LP share calculation using current reserves - flashloan can inflate/deflate share value"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-682: Incorrect Calculation"
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $SHARES = ($AMOUNT * totalSupply) / $TOKEN.balanceOf(address(this))
+          - pattern: |
+              $SHARES = ($AMOUNT * totalSupply()) / reserve$N
+
+  # ============================================
+  # NEW: Utilization Rate Manipulation
+  # ============================================
+
+  - id: sol-utilization-rate-unbounded
+    message: "Utilization rate calculation without upper bound - can exceed 100% causing inflated interest (Silo Finance pattern)"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-682: Incorrect Calculation"
+      references:
+        - https://medium.com/immunefi/silo-finance-logic-error-bugfix-review-35de59d4b9ce
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $UTIL = $BORROWED * $PRECISION / $DEPOSITED
+          - pattern: |
+              function $GET_UTIL(...) {
+                ...
+                return $BORROWED * ... / $DEPOSITED;
+              }
+      - pattern-not-inside: |
+          if ($UTIL > $MAX) { $UTIL = $MAX; }
+          ...
+      - pattern-not-inside: |
+          return $UTIL > 1e18 ? 1e18 : $UTIL;
+
+  # ============================================
+  # NEW: Integer Truncation
+  # ============================================
+
+  - id: sol-uint256-to-uint128-truncation
+    message: "Implicit or explicit truncation from uint256 to smaller type - high bits lost (Moonbeam pattern)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-681: Incorrect Conversion between Numeric Types"
+      references:
+        - https://medium.com/immunefi/moonbeam-missing-call-check-bugfix-review-d2ee39be3c0
+    patterns:
+      - pattern-either:
+          - pattern: uint128($X)
+          - pattern: uint64($X)
+          - pattern: uint32($X)
+          - pattern: "uint128 $Y = $X"
+          - pattern: "uint64 $Y = $X"
+      - pattern-not-inside: |
+          require($X <= type(uint128).max, ...);
+          ...
+
