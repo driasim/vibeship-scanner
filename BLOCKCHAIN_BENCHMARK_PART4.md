@@ -57,21 +57,17 @@ INFO-level findings that guide developers toward better security practices.
 
 | # | Repository | Type | Status | Scan ID | Findings | Key Detections |
 |---|------------|------|--------|---------|----------|----------------|
-| 1 | [SunWeb3Sec/DeFiHackLabs](https://github.com/SunWeb3Sec/DeFiHackLabs) | 300+ Real Exploits | ⚠️ OOM | `32349b34` | N/A | 716 .sol files exceeded memory |
+| 1 | [SunWeb3Sec/DeFiHackLabs](https://github.com/SunWeb3Sec/DeFiHackLabs) | 300+ Real Exploits | ✅ Complete | `b17bbc28` | **47,497** | Flash loans, oracles, reentrancy |
 | 2 | [hknio/anniversary-ctf](https://github.com/hknio/anniversary-ctf) | Hacken 2024 (Re-scan) | ✅ Complete | `0b3e61aa` | **94** | New rules validated |
 
-### DeFiHackLabs Scan Issue
+### DeFiHackLabs Scan Issue - RESOLVED
 
-The DeFiHackLabs repository (716 Solidity files) caused an **Out of Memory** crash on Fly.io:
-```
-[OOM] Killed process 4892 (forge) total-vm:7145476kB, anon-rss:5868080kB
-[OOM] Killed process 6844 (forge) total-vm:9603072kB, anon-rss:7678784kB
-```
+The initial scan (32349b34) caused an **Out of Memory** crash due to `forge build` on 716 Solidity files.
 
-**Workarounds:**
-1. Increase Fly.io VM memory (currently 2GB → need 8GB+)
-2. Scan specific subdirectories instead of entire repo
-3. Skip forge compilation for massive repos
+**Solution Implemented:** Added large repo protection (`MAX_SOL_FILES_FOR_COMPILATION = 400`):
+- Compilation-based scanners (Slither, Mythril, Aderyn) are skipped for repos > 400 .sol files
+- Pattern-based scanning (Opengrep) uses chunked processing (48 chunks of 15 files)
+- No OOM crashes, successful completion in ~27 minutes
 
 ---
 
@@ -96,6 +92,46 @@ DeFiHackLabs contains 300+ real exploit PoCs from 2021-2024. Our new rules targe
 ### Bridge Exploits (Expected: 15+)
 - `defi-bridge-signature-replay`
 - `defi-bridge-merkle-proof-validation`
+
+---
+
+## DeFiHackLabs Scan Results (b17bbc28)
+
+**Scan completed successfully on 716 Solidity files (300+ real exploit PoCs)**
+
+### Scanner Breakdown
+| Scanner | Findings | Time | Notes |
+|---------|----------|------|-------|
+| **Opengrep** | 78,621 | 25min | Chunked into 48 batches |
+| **Solhint** | 39,277 | 27min | Style + security rules |
+| **Gitleaks** | 259 | 6s | Secrets in exploit PoCs |
+| **Checkov** | 2 | 86s | IaC checks |
+| **Fuzz-coverage** | 1 | <1s | Coverage hint |
+| **Slither** | 1 | <1s | Large repo warning (skipped) |
+| **Total Raw** | 118,161 | - | Before deduplication |
+| **Total Deduped** | **47,497** | 27min | Final unique findings |
+
+### Severity Distribution
+| Severity | Count | % of Total |
+|----------|-------|------------|
+| Critical | 259 | 0.5% |
+| High | 8,719 | 18.4% |
+| Medium | 12,551 | 26.4% |
+| Low | 14,628 | 30.8% |
+| Info | 11,340 | 23.9% |
+
+### Skipped Scanners (Large Repo Protection)
+These scanners require `forge build` compilation which would cause OOM on 716 files:
+- ❌ Mythril (symbolic execution)
+- ❌ Aderyn (Cyfrin patterns)
+- ❌ Slither (full analysis) - only warning emitted
+- ❌ Slither-upgradeability
+
+### Why So Many Findings?
+DeFiHackLabs contains **intentionally vulnerable exploit PoCs** reproducing real hacks:
+- Each exploit file demonstrates multiple vulnerabilities
+- Code is written to be exploitable (for educational purposes)
+- Expected to have very low security score (Grade: F)
 
 ---
 
@@ -134,8 +170,10 @@ Base rules: _shared/secrets.yaml, _shared/urls.yaml, _shared/comments.yaml,
 | Part 1 | 25 | 15 | 5 | 5 | ~10,000 |
 | Part 2 | 20 | 6 | 4 | 10 | ~32,000 |
 | Part 3 | 3 | 2 | 1 | 0 | ~12,300 |
-| Part 4 | 2 | TBD | 1 | 0 | TBD |
-| **Total** | **50** | **23+** | **11** | **15** | **~55,000+** |
+| Part 4 | 2 | 2 | 0 | 0 | **47,591** |
+| **Total** | **50** | **25** | **10** | **15** | **~102,000** |
+
+**Part 4 Milestone:** Successfully scanned DeFiHackLabs (716 files, 47,497 findings) - the largest blockchain repo in our benchmark!
 
 ### Detection Rules
 
@@ -219,5 +257,6 @@ Each hint includes actionable recommendations:
 ---
 
 *Created: 2026-01-07*
-*Part 1: 25 repos | Part 2: 20 repos | Part 3: 3 repos | Part 4: 2+ repos*
-*Total: 50+ repos | New Rules: 70+ (defi-advanced + security-hints)*
+*Updated: 2026-01-07 - DeFiHackLabs scan complete (47,497 findings)*
+*Part 1: 25 repos | Part 2: 20 repos | Part 3: 3 repos | Part 4: 2 repos*
+*Total: 50 repos | 102,000+ findings | New Rules: 70+ (defi-advanced + security-hints)*
