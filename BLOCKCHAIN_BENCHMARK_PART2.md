@@ -12,20 +12,20 @@ Building on Part 1 (25 repos), this benchmark focuses on additional CTF challeng
 | 4 | [0xToshii/mr-steal-yo-crypto-ctf-foundry](https://github.com/0xToshii/mr-steal-yo-crypto-ctf-foundry) | DeFi Exploits | ✅ **VERIFIED** | `4109a3ea` | 4,736 | **20/20 (100%)** |
 | 5 | [Quillhash/Quill-CTFs](https://github.com/Quillhash/Quill-CTFs) | Quill CTF | ✅ **VERIFIED** | `e692e4fd` | 91 | **4/4 (100%)** |
 | 6 | [fvictorio/evm-puzzles](https://github.com/fvictorio/evm-puzzles) | EVM Bytecode | ⚠️ Bytecode only | `3c92864f` | 17 | N/A (no .sol) |
-| 7 | [daltyboy11/more-evm-puzzles](https://github.com/daltyboy11/more-evm-puzzles) | EVM Bytecode | Pending | - | - | - |
-| 8 | [blockthreat/blocksec-ctfs](https://github.com/blockthreat/blocksec-ctfs) | CTF List | Pending | - | - | - |
+| 7 | [daltyboy11/more-evm-puzzles](https://github.com/daltyboy11/more-evm-puzzles) | EVM Bytecode | ⚠️ JS only | `6530bf18` | 15 | N/A (no .sol) |
+| 8 | [blockthreat/blocksec-ctfs](https://github.com/blockthreat/blocksec-ctfs) | CTF List | ⚠️ Curated list | - | - | N/A (links only) |
 | 9 | [sayan011/Immunefi-bug-bounty-writeups-list](https://github.com/sayan011/Immunefi-bug-bounty-writeups-list) | Bug Bounty | Pending | - | - | - |
-| 10 | [tpiliposian/Immunefi-bugfixes](https://github.com/tpiliposian/Immunefi-bugfixes) | Critical Bugs | Pending | - | - | - |
+| 10 | [tpiliposian/Immunefi-bugfixes](https://github.com/tpiliposian/Immunefi-bugfixes) | Critical Bugs | ✅ Scanned | `c4e61b86` | 366 | Solana+Sol patterns |
 | 11 | [federicovilla55/Smart-Contract-Exploitation](https://github.com/federicovilla55/Smart-Contract-Exploitation) | Exploitation | ⚠️ Docs only | `048d21a7` | 194 | N/A (mostly docs) |
 | 12 | [0xKitsune/EVM-Book](https://github.com/0xKitsune/EVM-Book) | EVM Reference | Pending | - | - | - |
 | 13 | [spearbit/portfolio](https://github.com/spearbit/portfolio) | Bridge Security | ⚠️ Docs only | `6341429b` | 0 | N/A (PDFs only) |
 | 14 | [TradMod/awesome-audits-checklists](https://github.com/TradMod/awesome-audits-checklists) | Audit Checklists | Pending | - | - | - |
 | 15 | [shanzson/Smart-Contract-Auditor-Tools-and-Techniques](https://github.com/shanzson/Smart-Contract-Auditor-Tools-and-Techniques) | Auditor Tools | Pending | - | - | - |
-| 16 | [code-423n4/2024-07-basin](https://github.com/code-423n4/2024-07-basin) | C4 Audit 2024 | Pending | - | - | - |
-| 17 | [sherlock-audit/2024-06-makerdao-endgame](https://github.com/sherlock-audit/2024-06-makerdao-endgame) | Sherlock 2024 | Pending | - | - | - |
+| 16 | [code-423n4/2024-07-basin](https://github.com/code-423n4/2024-07-basin) | C4 Audit 2024 | ✅ Scanned | `43303932` | 6,179 | Multi-scanner |
+| 17 | [sherlock-audit/2024-06-makerdao-endgame](https://github.com/sherlock-audit/2024-06-makerdao-endgame) | Sherlock 2024 | 🔄 Scanning | `65b33fe4` | - | - |
 | 18 | [x676f64/secureum-mind_map](https://github.com/x676f64/secureum-mind_map) | Secureum Docs | Pending | - | - | - |
 | 19 | [0xJuancito/capture-the-ether-solutions](https://github.com/0xJuancito/capture-the-ether-solutions) | CTE Solutions | ✅ **VERIFIED** | `b47747b5` | 288 | **14/14 SAST (100%)** |
-| 20 | [PumpkingWok/CTFGym](https://github.com/PumpkingWok/CTFGym) | CTF Collection | Pending | - | - | - |
+| 20 | [PumpkingWok/CTFGym](https://github.com/PumpkingWok/CTFGym) | CTF Collection | ✅ Scanned | `922c2dd7` | 155 | Solidity patterns |
 
 ---
 
