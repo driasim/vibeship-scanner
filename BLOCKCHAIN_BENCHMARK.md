@@ -1,12 +1,24 @@
 # Blockchain/DeFi Security Benchmark - 25 Repos
 
+## Quick Reference - Key Scan IDs
+
+| Scan ID | Repository | Findings | View Results |
+|---------|------------|----------|--------------|
+| `b17bbc28` | DeFiHackLabs (716 files) | 47,497 | https://scanner.vibeship.co/scan/b17bbc28-a2e9-412b-a8ae-943ee230502c |
+| `0b3e61aa` | Hacken Anniversary CTF | 94 | https://scanner.vibeship.co/scan/0b3e61aa-0167-478e-9357-078b9a1981a6 |
+| `5a5a4fef` | DeFiVulnLabs (57 vulns) | 2,613 | https://scanner.vibeship.co/scan/5a5a4fef |
+| `3ae805a8` | Ethernaut (31 levels) | 1,954 | https://scanner.vibeship.co/scan/3ae805a8 |
+| `dced6c73` | Damn Vulnerable DeFi | 2,725 | https://scanner.vibeship.co/scan/dced6c73 |
+
+---
+
 ## Scanning Progress Tracker
 
 | # | Repository | Type | Status | Scan ID | Findings | Coverage |
 |---|------------|------|--------|---------|----------|----------|
 | 1 | [crytic/not-so-smart-contracts](https://github.com/crytic/not-so-smart-contracts) | Vuln Examples | ✅ Done | `08124dee` | 1,559 | 12/12 (100%) |
 | 2 | [SunWeb3Sec/DeFiVulnLabs](https://github.com/SunWeb3Sec/DeFiVulnLabs) | 48+ Vuln Types | ✅ VERIFIED | `5a5a4fef` | 2,613 | 57/57 (100%) ★ |
-| 3 | [SunWeb3Sec/DeFiHackLabs](https://github.com/SunWeb3Sec/DeFiHackLabs) | 674+ Real Hacks | ⚠️ Partial | `c1cf11ff` | 44,194* | TBD |
+| 3 | [SunWeb3Sec/DeFiHackLabs](https://github.com/SunWeb3Sec/DeFiHackLabs) | 716 Real Exploits | ✅ Done | `b17bbc28` | **47,497** | See Part 4 |
 | 4 | [OpenZeppelin/ethernaut](https://github.com/OpenZeppelin/ethernaut) | CTF Challenges | ✅ VERIFIED | `3ae805a8` | 1,954 | 31/31 (100%) ★ |
 | 5 | [theredguild/damn-vulnerable-defi](https://github.com/theredguild/damn-vulnerable-defi) | DeFi CTF | ✅ VERIFIED | `dced6c73` | 2,725 | 18/18 (100%) ★ |
 | 6 | [SmartContractSecurity/SWC-registry](https://github.com/SmartContractSecurity/SWC-registry) | SWC Test Cases | ⚠️ No .sol | `0eecb633` | 3 | N/A (markdown) |
