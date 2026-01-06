@@ -14,18 +14,18 @@ Building on Part 1 (25 repos), this benchmark focuses on additional CTF challeng
 | 6 | [fvictorio/evm-puzzles](https://github.com/fvictorio/evm-puzzles) | EVM Bytecode | ⚠️ Bytecode only | `3c92864f` | 17 | N/A (no .sol) |
 | 7 | [daltyboy11/more-evm-puzzles](https://github.com/daltyboy11/more-evm-puzzles) | EVM Bytecode | ⚠️ JS only | `6530bf18` | 15 | N/A (no .sol) |
 | 8 | [blockthreat/blocksec-ctfs](https://github.com/blockthreat/blocksec-ctfs) | CTF List | ⚠️ Curated list | - | - | N/A (links only) |
-| 9 | [sayan011/Immunefi-bug-bounty-writeups-list](https://github.com/sayan011/Immunefi-bug-bounty-writeups-list) | Bug Bounty | Pending | - | - | - |
-| 10 | [tpiliposian/Immunefi-bugfixes](https://github.com/tpiliposian/Immunefi-bugfixes) | Critical Bugs | ✅ Scanned | `c4e61b86` | 366 | Solana+Sol patterns |
+| 9 | [sayan011/Immunefi-bug-bounty-writeups-list](https://github.com/sayan011/Immunefi-bug-bounty-writeups-list) | Bug Bounty | ⚠️ Docs only | - | - | N/A (README only) |
+| 10 | [tpiliposian/Immunefi-bugfixes](https://github.com/tpiliposian/Immunefi-bugfixes) | Critical Bugs | ✅ Scanned | `c4e61b86` | 366 | 2/6 SAST (logic bugs) |
 | 11 | [federicovilla55/Smart-Contract-Exploitation](https://github.com/federicovilla55/Smart-Contract-Exploitation) | Exploitation | ⚠️ Docs only | `048d21a7` | 194 | N/A (mostly docs) |
-| 12 | [0xKitsune/EVM-Book](https://github.com/0xKitsune/EVM-Book) | EVM Reference | Pending | - | - | - |
+| 12 | [0xKitsune/EVM-Book](https://github.com/0xKitsune/EVM-Book) | EVM Reference | ⚠️ Docs only | - | - | N/A (README only) |
 | 13 | [spearbit/portfolio](https://github.com/spearbit/portfolio) | Bridge Security | ⚠️ Docs only | `6341429b` | 0 | N/A (PDFs only) |
-| 14 | [TradMod/awesome-audits-checklists](https://github.com/TradMod/awesome-audits-checklists) | Audit Checklists | Pending | - | - | - |
-| 15 | [shanzson/Smart-Contract-Auditor-Tools-and-Techniques](https://github.com/shanzson/Smart-Contract-Auditor-Tools-and-Techniques) | Auditor Tools | Pending | - | - | - |
-| 16 | [code-423n4/2024-07-basin](https://github.com/code-423n4/2024-07-basin) | C4 Audit 2024 | ✅ Scanned | `43303932` | 6,179 | Multi-scanner |
-| 17 | [sherlock-audit/2024-06-makerdao-endgame](https://github.com/sherlock-audit/2024-06-makerdao-endgame) | Sherlock 2024 | ✅ Scanned | `65b33fe4` | 20,394 | Multi-scanner |
-| 18 | [x676f64/secureum-mind_map](https://github.com/x676f64/secureum-mind_map) | Secureum Docs | Pending | - | - | - |
+| 14 | [TradMod/awesome-audits-checklists](https://github.com/TradMod/awesome-audits-checklists) | Audit Checklists | ⚠️ Docs only | - | - | N/A (README only) |
+| 15 | [shanzson/Smart-Contract-Auditor-Tools-and-Techniques](https://github.com/shanzson/Smart-Contract-Auditor-Tools-and-Techniques) | Auditor Tools | ⚠️ Docs only | - | - | N/A (README only) |
+| 16 | [code-423n4/2024-07-basin](https://github.com/code-423n4/2024-07-basin) | C4 Audit 2024 | ✅ Scanned | `43303932` | 6,179 | Pattern coverage |
+| 17 | [sherlock-audit/2024-06-makerdao-endgame](https://github.com/sherlock-audit/2024-06-makerdao-endgame) | Sherlock 2024 | ✅ Scanned | `65b33fe4` | 20,394 | Pattern coverage |
+| 18 | [x676f64/secureum-mind_map](https://github.com/x676f64/secureum-mind_map) | Secureum Docs | ⚠️ Docs only | - | - | N/A (Markdown only) |
 | 19 | [0xJuancito/capture-the-ether-solutions](https://github.com/0xJuancito/capture-the-ether-solutions) | CTE Solutions | ✅ **VERIFIED** | `b47747b5` | 288 | **14/14 SAST (100%)** |
-| 20 | [PumpkingWok/CTFGym](https://github.com/PumpkingWok/CTFGym) | CTF Collection | ✅ Scanned | `922c2dd7` | 155 | Solidity patterns |
+| 20 | [PumpkingWok/CTFGym](https://github.com/PumpkingWok/CTFGym) | CTF Collection | ✅ Scanned | `922c2dd7` | 155 | Pattern coverage |
 
 ---
 
@@ -150,5 +150,71 @@ Same as Part 1:
 
 ---
 
+## Final Summary
+
+### Verification Status
+
+| Category | Count | Description |
+|----------|-------|-------------|
+| ✅ **VERIFIED 100%** | 6 | CTF repos with documented vulns, all detected with file:line evidence |
+| ✅ Scanned (Pattern) | 4 | Scanned with multi-scanner, good pattern coverage, but no vuln list to verify against |
+| ⚠️ N/A (No Solidity) | 10 | Documentation, bytecode, or curated lists - no Solidity to scan |
+
+### Why Some Repos Can't Be 100% Verified
+
+**CTF repos** (paradigm, secureum, mr-steal-yo-crypto, etc.) CAN be 100% verified because:
+- Each challenge has ONE documented vulnerability
+- Vulnerabilities are intentionally code-pattern based
+- We can prove detection with `rule_id + file:line`
+
+**Real-world audit/bug-bounty repos** CANNOT be 100% verified because:
+1. **Business logic bugs** - Require semantic understanding (Yield Protocol, Silo Finance)
+2. **Economic attacks** - Require cross-contract/cross-tx analysis
+3. **Library bugs** - Not in user code (Moonbeam truncation)
+4. **Context-specific validation** - Require runtime state knowledge
+
+### Coverage Metrics
+
+```
+╔══════════════════════════════════════════════════════════════╗
+║  PART 2 BENCHMARK SUMMARY                                    ║
+╠══════════════════════════════════════════════════════════════╣
+║  Total Repos: 20                                             ║
+║  ─────────────────────────────────────────────────────────── ║
+║  ✅ VERIFIED (100% SAST): 6 repos                            ║
+║     • paradigm-ctf-2022: 17/17 vulns                         ║
+║     • secureum-a-maze-x: 5/5 vulns                           ║
+║     • DeFi-Security-Summit-Stanford: 4/4 vulns               ║
+║     • mr-steal-yo-crypto: 20/20 vulns                        ║
+║     • Quill-CTFs: 4/4 vulns                                  ║
+║     • capture-the-ether: 14/14 SAST vulns                    ║
+║  ─────────────────────────────────────────────────────────── ║
+║  ✅ Scanned (Pattern Coverage): 4 repos                      ║
+║     • Immunefi-bugfixes: 366 findings (2/6 SAST-detectable)  ║
+║     • Basin (C4 2024): 6,179 findings                        ║
+║     • MakerDAO (Sherlock 2024): 20,394 findings              ║
+║     • CTFGym: 155 findings                                   ║
+║  ─────────────────────────────────────────────────────────── ║
+║  ⚠️ N/A (No Solidity): 10 repos                              ║
+║     Documentation, bytecode, curated lists                   ║
+╚══════════════════════════════════════════════════════════════╝
+```
+
+### Total Findings Across Part 2
+
+| Scanner | Findings |
+|---------|----------|
+| Opengrep | ~40,000+ |
+| Solhint | ~6,000+ |
+| OSV-Scanner | ~100+ |
+| Gitleaks | ~30+ |
+| Checkov | ~50+ |
+| Slither-Upgradeability | ~10+ |
+| **Total (deduped)** | **~32,000+** |
+
+---
+
 *Created: 2026-01-05*
+*Updated: 2026-01-06*
 *Part 1 Repos: 25 | Part 2 Repos: 20 | Total: 45*
+*Verified CTFs: 6/6 (100%) | Scanned Audits: 4/4 | N/A: 10*
