@@ -22,7 +22,7 @@ Building on Part 1 (25 repos), this benchmark focuses on additional CTF challeng
 | 14 | [TradMod/awesome-audits-checklists](https://github.com/TradMod/awesome-audits-checklists) | Audit Checklists | Pending | - | - | - |
 | 15 | [shanzson/Smart-Contract-Auditor-Tools-and-Techniques](https://github.com/shanzson/Smart-Contract-Auditor-Tools-and-Techniques) | Auditor Tools | Pending | - | - | - |
 | 16 | [code-423n4/2024-07-basin](https://github.com/code-423n4/2024-07-basin) | C4 Audit 2024 | ✅ Scanned | `43303932` | 6,179 | Multi-scanner |
-| 17 | [sherlock-audit/2024-06-makerdao-endgame](https://github.com/sherlock-audit/2024-06-makerdao-endgame) | Sherlock 2024 | 🔄 Scanning | `65b33fe4` | - | - |
+| 17 | [sherlock-audit/2024-06-makerdao-endgame](https://github.com/sherlock-audit/2024-06-makerdao-endgame) | Sherlock 2024 | ✅ Scanned | `65b33fe4` | 20,394 | Multi-scanner |
 | 18 | [x676f64/secureum-mind_map](https://github.com/x676f64/secureum-mind_map) | Secureum Docs | Pending | - | - | - |
 | 19 | [0xJuancito/capture-the-ether-solutions](https://github.com/0xJuancito/capture-the-ether-solutions) | CTE Solutions | ✅ **VERIFIED** | `b47747b5` | 288 | **14/14 SAST (100%)** |
 | 20 | [PumpkingWok/CTFGym](https://github.com/PumpkingWok/CTFGym) | CTF Collection | ✅ Scanned | `922c2dd7` | 155 | Solidity patterns |
