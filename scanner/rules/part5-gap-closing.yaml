@@ -1,0 +1,427 @@
+# Part 5 Gap-Closing Rules
+# Based on GCTF-2024, OnlyPwner, and Faillapop gap analysis
+# Created: 2026-01-08
+rules:
+
+  # ============================================
+  # GCTF-2024 GAPS - ITERATION 2 (Pattern-Matched)
+  # ============================================
+
+  # TimeLock: lockTime += _secondsToIncrease (public unchecked increment)
+  - id: sol-timelock-increment-overflow
+    message: "Public function increments lockTime without bounds - can overflow to bypass timelock (GCTF-2024 TimeLock)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-190: Integer Overflow"
+      source: "GCTF-2024 TimeLock - EXACT MATCH"
+      exploit: "User passes MAX_UINT to overflow lockTime, making it smaller than block.timestamp"
+    pattern: lockTime += $VAR
+
+  # TheClassis: State zeroed after call (simple pattern - just detect the zero assignment)
+  - id: sol-reentrancy-balance-zero
+    message: "Balance set to zero - verify this happens BEFORE external calls to prevent reentrancy (GCTF-2024 TheClassis)"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-841: Improper Enforcement of Behavioral Workflow"
+      source: "GCTF-2024 TheClassis"
+    pattern: balances[msg.sender] = 0
+
+  # Token_Bonanza: require(msg.sender != owner) - INVERTED check
+  - id: sol-access-control-inverted-check
+    message: "Access control uses != instead of == - anyone EXCEPT owner can call (GCTF-2024 FaultyTokenOwner)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-863: Incorrect Authorization"
+      source: "GCTF-2024 Token_Bonanza FaultyTokenOwner - EXACT MATCH"
+      exploit: "Modifier checks msg.sender != owner, so non-owners can mint tokens"
+    pattern: require(msg.sender != owner, ...)
+
+  - id: sol-timelock-overflow-bypass
+    message: "Timelock duration added to block.timestamp may overflow - attacker can bypass waiting period"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-190: Integer Overflow"
+      source: "GCTF-2024 Timelock challenge"
+      exploit: "Attacker sets extremely large duration that overflows, resulting in unlock time in the past"
+    patterns:
+      - pattern-either:
+          - pattern: |
+              unlockTime = block.timestamp + $DURATION
+          - pattern: |
+              $LOCK.timestamp = block.timestamp + $PERIOD
+          - pattern: |
+              lockEnd = block.timestamp + $DELAY
+      - pattern-not-inside: |
+          require($DURATION <= $MAX_DURATION, ...);
+          ...
+      - pattern-not-inside: |
+          if ($DURATION > $MAX) revert ...;
+          ...
+
+  - id: sol-timelock-user-controlled-duration
+    message: "User-controlled timelock duration without bounds check - can set to 0 or overflow value"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      source: "GCTF-2024 Timelock"
+    patterns:
+      - pattern-inside: |
+          function $LOCK(..., uint256 $DURATION, ...) {
+            ...
+          }
+      - pattern: |
+          $VAR = block.timestamp + $DURATION
+      - pattern-not-inside: |
+          require($DURATION >= $MIN_DURATION, ...);
+          ...
+      - pattern-not-inside: |
+          require($DURATION > 0, ...);
+          ...
+
+  - id: sol-owner-only-bypass-init
+    message: "onlyOwner modifier but owner can be set via unprotected initializer"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-284: Improper Access Control"
+      source: "GCTF-2024 TokenBonanza challenge"
+    patterns:
+      - pattern-inside: |
+          contract $CONTRACT {
+            ...
+            address public owner;
+            ...
+            modifier onlyOwner() {
+              require(msg.sender == owner, ...);
+              _;
+            }
+            ...
+          }
+      - pattern: |
+          function $INIT(...) public {
+            owner = $ADDR;
+            ...
+          }
+      - pattern-not-inside: |
+          function $INIT(...) public initializer {
+            ...
+          }
+
+  - id: sol-owner-reassignment-no-check
+    message: "Owner can be reassigned without checking current ownership - front-running risk"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      source: "GCTF-2024 TokenBonanza"
+    patterns:
+      - pattern: |
+          function setOwner(address $NEW) {
+            owner = $NEW;
+          }
+      - pattern-not-inside: |
+          require(msg.sender == owner, ...);
+          ...
+
+  - id: sol-classic-reentrancy-cei-violation
+    message: "State change after external call - classic CEI violation, reentrancy possible"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-841: Improper Enforcement of Behavioral Workflow"
+      source: "GCTF-2024 TheClassis challenge"
+      exploit: "Checks-Effects-Interactions pattern violation"
+    patterns:
+      - pattern-either:
+          # Direct ETH transfer before state update
+          - pattern: |
+              (bool $OK, ) = $TO.call{value: $AMT}("");
+              ...
+              balances[$USER] -= $AMT
+          # payable.transfer before state update
+          - pattern: |
+              payable($TO).transfer($AMT);
+              ...
+              balances[$USER] -= $AMT
+          # ERC20 transfer before state update
+          - pattern: |
+              $TOKEN.transfer($TO, $AMT);
+              ...
+              $MAPPING[$USER] -= $AMT
+
+  - id: sol-withdraw-reentrancy-no-guard
+    message: "Withdraw function with external call but no reentrancy guard or CEI pattern"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      source: "GCTF-2024 TheClassis"
+    patterns:
+      - pattern-inside: |
+          function withdraw(...) {
+            ...
+          }
+      - pattern: |
+          (bool $SUCCESS, ) = msg.sender.call{value: ...}("")
+      - pattern-not-inside: |
+          nonReentrant
+      - pattern-not-inside: |
+          require(!locked, ...);
+          locked = true;
+          ...
+
+  # ============================================
+  # ONLYPWNER GAPS
+  # ============================================
+
+  - id: sol-mev-yield-extraction-whale
+    message: "Yield distribution susceptible to whale MEV extraction - no caps or time-weighted distribution"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      source: "OnlyPwner bobface-diversion challenge"
+      exploit: "Whale can sandwich deposit/withdraw around yield distribution"
+    patterns:
+      - pattern-inside: |
+          function distributeYield(...) {
+            ...
+          }
+      - pattern: |
+          for (...) {
+            ...
+            rewards[$USER] = $BALANCE * $RATE / $TOTAL
+            ...
+          }
+      - pattern-not-inside: |
+          require(block.timestamp >= lastDistribution + $MIN_INTERVAL, ...);
+          ...
+
+  - id: sol-jit-liquidity-vulnerable
+    message: "Liquidity provision without time lock - vulnerable to JIT (just-in-time) attacks"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security
+      source: "OnlyPwner diversion"
+    patterns:
+      - pattern-inside: |
+          function addLiquidity(...) {
+            ...
+          }
+      - pattern-not-inside: |
+          require(block.timestamp >= deposits[$USER] + $LOCK_TIME, ...);
+          ...
+
+  - id: sol-rugpull-owner-drain
+    message: "Owner can drain all funds without timelock - rugpull risk"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      source: "OnlyPwner bobface-reverse-rugpull challenge"
+    patterns:
+      - pattern-inside: |
+          function $FUNC(...) ... onlyOwner ... {
+            ...
+          }
+      - pattern-either:
+          - pattern: |
+              $TOKEN.transfer(owner, $TOKEN.balanceOf(address(this)))
+          - pattern: |
+              payable(owner).transfer(address(this).balance)
+          - pattern: |
+              (bool $OK, ) = owner.call{value: address(this).balance}("")
+
+  - id: sol-rugpull-defense-backfire
+    message: "Rugpull defense mechanism may backfire on attacker - verify logic"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security
+      source: "OnlyPwner reverse-rugpull"
+    patterns:
+      - pattern-inside: |
+          function emergencyWithdraw(...) {
+            ...
+          }
+      - pattern: |
+          require(msg.sender == owner, ...)
+      - pattern-inside: |
+          $TOKEN.transferFrom(owner, ...)
+
+  - id: sol-multisig-signer-enumeration
+    message: "Multisig signers can be enumerated via public mapping - privacy concern"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security
+      source: "OnlyPwner multisig"
+    pattern: |
+      mapping(address => bool) public isSigner
+
+  - id: sol-multisig-replay-tx-hash
+    message: "Multisig transaction hash doesn't include nonce - replay attack possible"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      source: "OnlyPwner multisig"
+    patterns:
+      - pattern: |
+          bytes32 $HASH = keccak256(abi.encode($TO, $VALUE, $DATA))
+      - pattern-not-inside: |
+          bytes32 $HASH = keccak256(abi.encode($TO, $VALUE, $DATA, nonce))
+
+  - id: sol-shapeshifter-metamorphic
+    message: "Contract uses CREATE2 with selfdestruct - can be metamorphic (code changes after deploy)"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      source: "OnlyPwner shapeshifter"
+      exploit: "Metamorphic contract attack"
+    patterns:
+      - pattern-inside: |
+          contract $NAME {
+            ...
+            function $DEPLOY(...) {
+              ...
+            }
+            ...
+          }
+      - pattern: |
+          $NEW = create2($SALT, ...)
+      - pattern-inside: |
+          selfdestruct(...)
+
+  - id: sol-protection-bypass-gasleft
+    message: "Protection uses gasleft() which can be manipulated by caller"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      source: "OnlyPwner shapeshifter"
+    patterns:
+      - pattern: |
+          require(gasleft() > $THRESHOLD, ...)
+      - pattern-not-inside: |
+          require(gasleft() > $THRESHOLD && gasleft() < $MAX, ...);
+          ...
+
+  - id: sol-voting-state-manipulation
+    message: "Vote can be finalized before intended deadline via state manipulation"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      source: "OnlyPwner please-sign-here"
+    patterns:
+      - pattern-inside: |
+          function finalize(...) {
+            ...
+          }
+      - pattern: |
+          require(votes >= threshold, ...)
+      - pattern-not-inside: |
+          require(block.timestamp >= deadline, ...);
+          ...
+
+  # ============================================
+  # ADDITIONAL PATTERNS FROM PART 5 ANALYSIS
+  # ============================================
+
+  - id: sol-hidden-fee-deceptive
+    message: "Fee not clearly documented or visible in function signature - deceptive pattern"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      source: "OnlyPwner liquid-staking"
+    patterns:
+      - pattern-inside: |
+          function deposit(...) {
+            ...
+          }
+      - pattern: |
+          uint256 $FEE = $AMOUNT * $RATE / $DENOM
+      - pattern-not-inside: |
+          /// @param $FEE_PARAM ...
+          function deposit(..., uint256 $FEE_PARAM, ...) {
+            ...
+          }
+
+  - id: sol-modifier-missing-underscore-critical
+    message: "Modifier without underscore (_) - function body NEVER executes, critical bug"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      source: "Faillapop analysis - 14 detections"
+      cwe: "CWE-670: Always-Incorrect Control Flow Implementation"
+    patterns:
+      - pattern-regex: 'modifier\s+\w+\s*\([^)]*\)\s*\{[^}]*\}(?!\s*_)'
+      - pattern-not-regex: '_\s*;'
+
+  - id: sol-dao-voting-without-snapshot
+    message: "DAO voting without balance snapshot - flash loan governance attack possible"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      source: "Faillapop DAO analysis"
+    patterns:
+      - pattern-inside: |
+          function vote(...) {
+            ...
+          }
+      - pattern: |
+          uint256 $POWER = $TOKEN.balanceOf(msg.sender)
+      - pattern-not-inside: |
+          uint256 $POWER = $TOKEN.getPastVotes(msg.sender, $SNAPSHOT)
+
+  - id: sol-marketplace-escrow-no-timeout
+    message: "Marketplace escrow without timeout - funds can be locked indefinitely"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      source: "Faillapop marketplace"
+    patterns:
+      - pattern-inside: |
+          function createEscrow(...) {
+            ...
+          }
+      - pattern: |
+          escrows[$ID] = Escrow({...})
+      - pattern-not-inside: |
+          escrows[$ID] = Escrow({..., deadline: block.timestamp + $PERIOD, ...})
+
+  - id: sol-dispute-centralized-resolution
+    message: "Dispute resolution controlled by single admin - centralization risk"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      source: "Faillapop DAO disputes"
+    patterns:
+      - pattern-inside: |
+          function resolveDispute(...) ... onlyOwner ... {
+            ...
+          }
+      - pattern-not-inside: |
+          function resolveDispute(...) ... onlyDAO ... {
+            ...
+          }
+

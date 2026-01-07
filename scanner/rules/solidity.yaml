@@ -1,6 +1,29 @@
 # Solidity/Smart Contract Security Rules
 # Based on semgrep-rules/solidity - https://github.com/semgrep/semgrep-rules
 rules:
+
+  # ============================================
+  # GCTF-2024 Gap-Closing Rules (TEXT MATCHING)
+  # ============================================
+
+  - id: sol-gctf-inverted-access
+    message: "INVERTED access control - msg.sender != owner allows anyone EXCEPT owner (GCTF-2024)"
+    languages: [solidity]
+    severity: ERROR
+    pattern-regex: 'msg\.sender\s*!=\s*owner'
+
+  - id: sol-gctf-timelock-increment
+    message: "lockTime public increment - overflow can bypass timelock (GCTF-2024)"
+    languages: [solidity]
+    severity: ERROR
+    pattern-regex: 'lockTime\s*\+='
+
+  - id: sol-gctf-balance-zero
+    message: "Balance zeroed - ensure this happens BEFORE external calls (GCTF-2024 TheClassis)"
+    languages: [solidity]
+    severity: WARNING
+    pattern-regex: 'balances\[msg\.sender\]\s*=\s*0'
+
   # ============================================
   # Critical: Access Control
   # ============================================

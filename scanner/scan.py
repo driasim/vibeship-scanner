@@ -74,6 +74,10 @@ ALWAYS_LOAD_RULES = [
     'ethernaut-gaps.yaml', # Ethernaut wargame gap-closing rules for Solidity
     'defi-advanced.yaml',  # DeFi protocol patterns (flash loans, AMM, lending, oracles)
     'security-hints.yaml', # Security guidance and fuzzing recommendations
+    'defi-exploits-tier1.yaml',  # TIER 1: precision, signatures, MEV, access control, logic flaws
+    'defivulnlabs-gaps.yaml',    # Gap-closing rules for DeFiVulnLabs coverage
+    'defi-exploits-tier2.yaml',  # TIER 2: bridges, storage layout, oracle enhancements
+    'part5-gap-closing.yaml',    # Part 5: GCTF-2024, OnlyPwner, Faillapop gap-closing rules
 ]
 
 
@@ -3088,7 +3092,15 @@ def run_all_scanners(repo_dir: str, stack: Dict[str, Any] = None) -> Dict[str, A
     raw_count = len(all_findings)
     print(f"[Scanners] Total raw findings: {raw_count}", file=sys.stderr)
 
-    # Deduplicate
+    # Post-processing pipeline
+    # 1. Calibrate severity (demote noisy rules)
+    all_findings = calibrate_severity(all_findings)
+
+    # 2. Filter test/mock paths
+    all_findings = filter_test_paths(all_findings)
+    print(f"[Scanners] After filtering: {len(all_findings)}", file=sys.stderr)
+
+    # 3. Deduplicate
     all_findings = deduplicate_findings(all_findings)
     print(f"[Scanners] After deduplication: {len(all_findings)}", file=sys.stderr)
 
@@ -3157,6 +3169,101 @@ def normalize_issue_type(finding: Dict[str, Any]) -> str:
 
     # Default: use simplified rule_id
     return rule_id.split('-')[0] if rule_id else 'unknown'
+
+
+# ============================================
+# FINDING POST-PROCESSING
+# Severity calibration and path filtering
+# ============================================
+
+# Benchmark mode: Set BENCHMARK_MODE=1 to disable test path filtering
+# Useful for validating coverage on security benchmark repos like DeFiVulnLabs
+def is_benchmark_mode() -> bool:
+    """Check if benchmark mode is enabled (checked at runtime)"""
+    return os.environ.get('BENCHMARK_MODE', '').lower() in ('1', 'true', 'yes')
+
+# Rules to demote to INFO (noisy, not security-critical)
+DEMOTE_TO_INFO_RULES = [
+    'solhint-use-natspec',           # Code style, not security
+    'solhint-no-global-import',      # Code style
+    'solhint-gas-small-strings',     # Gas optimization, not security
+    'solhint-quotes',                # String formatting
+    'solhint-visibility-modifier-order',  # Code style
+    'solhint-func-order',            # Code style
+]
+
+# Path patterns to filter out (test/mock directories)
+# Disabled in BENCHMARK_MODE
+SKIP_PATH_PATTERNS = [
+    '/test/',
+    '/tests/',
+    '/mock/',
+    '/mocks/',
+    '/fixture/',
+    '/fixtures/',
+    '/_test.',
+    '.test.',
+    '_test.sol',
+    'Test.sol',
+    '.spec.',
+    '/forge-std/',     # Foundry standard library
+    '/lib/openzeppelin',  # Known good libraries
+]
+
+
+def calibrate_severity(findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Demote noisy rules to INFO severity.
+    This reduces their impact on score while keeping them visible.
+    """
+    demoted_count = 0
+    for finding in findings:
+        rule_id = finding.get('ruleId', '')
+        if rule_id in DEMOTE_TO_INFO_RULES:
+            if finding.get('severity', '') != 'info':
+                finding['severity'] = 'info'
+                finding['demoted'] = True  # Mark as demoted for transparency
+                demoted_count += 1
+
+    if demoted_count > 0:
+        print(f"[Filter] Demoted {demoted_count} noisy findings to INFO severity", file=sys.stderr)
+
+    return findings
+
+
+def filter_test_paths(findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Filter out findings from test/mock directories.
+    These are expected to contain vulnerable patterns for testing.
+
+    Disabled when BENCHMARK_MODE=1 for validating security benchmark repos.
+    """
+    if is_benchmark_mode():
+        print(f"[Filter] BENCHMARK_MODE enabled - skipping test path filtering", file=sys.stderr)
+        return findings
+
+    filtered = []
+    skipped_count = 0
+
+    for finding in findings:
+        file_path = finding.get('location', {}).get('file', '')
+
+        # Check if file matches any skip pattern
+        should_skip = False
+        for pattern in SKIP_PATH_PATTERNS:
+            if pattern.lower() in file_path.lower():
+                should_skip = True
+                break
+
+        if should_skip:
+            skipped_count += 1
+        else:
+            filtered.append(finding)
+
+    if skipped_count > 0:
+        print(f"[Filter] Filtered out {skipped_count} findings from test/mock paths", file=sys.stderr)
+
+    return filtered
 
 
 def get_severity_priority(severity: str) -> int:
