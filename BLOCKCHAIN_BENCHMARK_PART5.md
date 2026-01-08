@@ -198,11 +198,40 @@ These repos were NOT scanned in Parts 1-4:
 | Repo | Total Vulns | SAST-able | Detected | Coverage | Gaps |
 |------|-------------|-----------|----------|----------|------|
 | GCTF-2024 | 5 | 5 | **5** | **100%** ✅ | 0 |
-| OnlyPwner | 17 | ~12 | 6 | 50% | 6+ |
+| OnlyPwner | 17 | ~15 | **14** | **93%** ✅ | 1 |
 | Faillapop | 9 | 6 | 6 | 100%* | 0 (SAST) |
+| Trail of Bits CTF | 5 | 4 | 1.5 | **37.5%** | 2.5 |
+| Curta | N/A | N/A | N/A | **N/A** | Production code |
 
 *Faillapop: 100% of SAST-detectable vulnerabilities found. Remaining require dynamic/semantic analysis.
 *GCTF-2024: 100% achieved on 2026-01-09 with scan `419c08fb`.
+*OnlyPwner: 93% achieved on 2026-01-09 with scan `441c5881`. Remaining: all-or-nothing (semantic).
+*Trail of Bits: Partial detections count as 0.5. Bank.sol reentrancy detected, Bounty.sol wrong variable not detected.
+*Curta: Production CTF platform, not vulnerable-by-design. No coverage metric applicable.
+
+---
+
+### Trail of Bits CTF Analysis (Scan `e7381c29`)
+
+| Challenge | Vulnerability | SAST? | Detected | Rule | Notes |
+|-----------|---------------|-------|----------|------|-------|
+| Bank.sol | CEI violation (reentrancy) | YES | ⚠️ PARTIAL | solhint-reentrancy, aderyn-reentrancy | Guard exists but ineffective |
+| Bounty.sol | Wrong variable (msg.sender vs chall) | YES | ❌ GAP | - | Logic flaw, hard to detect |
+| Casino.sol | Centralized randomness | NO | ➖ N/A | - | Server-based, not on-chain |
+| GreHackCoin.sol | Auth bypass (initOwner) | YES | ⚠️ PARTIAL | sol-swc-118-constructor-typo | Constructor patterns |
+| ETHERSNOOB | Integer overflow (10 challenges) | YES | ⚠️ PARTIAL | sol-swc-118 | Pre-0.8 Solidity |
+
+**Multi-Language Bonus Detections:**
+- Solana/Anchor: `anchor-init-if-needed` (31), `anchor-close-account` (31)
+- Python: `py-path-traversal-open` (7), `py-flask-no-rate-limit` (7)
+
+### Curta Analysis (Scan `311a9b91`)
+
+**NOT A BENCHMARK REPO** - Curta (curta.wtf) is a production CTF platform deployed on mainnet.
+- Core contracts are well-written production code
+- `sol-weak-randomness-blockhash` findings (31) are in PUZZLE implementations, intentional for CTF
+- Most findings are code quality/informational issues
+- No documented "vulnerabilities" to detect since it's not vulnerable-by-design
 
 ---
 

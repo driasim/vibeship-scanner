@@ -205,6 +205,33 @@ rules:
       - pattern: keccak256(abi.encode(...))
       - pattern: keccak256(abi.encodePacked(...))
 
+  # OnlyPwner all-or-nothing: recipient parameter allows betting for others
+  - id: sol-onlypwner-bet-recipient-manipulation
+    message: "Bet function accepts recipient parameter - allows manipulating bets for arbitrary addresses (OnlyPwner all-or-nothing)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      source: "OnlyPwner bobface-all-or-nothing"
+      cwe: "CWE-284: Improper Access Control"
+      exploit: "Attacker uses multicall to batch-bet for multiple addresses, monopolizing bet slots"
+    pattern: bets[$RECIPIENT] = $NUMBER
+
+  # all-or-nothing: General pattern for state modification on recipient instead of msg.sender
+  - id: sol-state-modify-recipient
+    message: "State modified for recipient parameter instead of msg.sender - potential access control bypass"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      source: "OnlyPwner all-or-nothing"
+    pattern: |
+      function $FUNC(..., address $RECIPIENT, ...) ... {
+        ...
+        $MAPPING[$RECIPIENT] = $VAL;
+        ...
+      }
+
   # OnlyPwner bridge-takeover: calldatacopy with full calldatasize as length
   - id: sol-calldatacopy-length-bug
     message: "calldatacopy uses calldatasize() as length without offset adjustment - may copy garbage data (OnlyPwner bridge-takeover)"
