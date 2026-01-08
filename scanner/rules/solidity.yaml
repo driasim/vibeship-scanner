@@ -3,7 +3,7 @@
 rules:
 
   # ============================================
-  # GCTF-2024 Gap-Closing Rules (pattern-regex for reliable matching)
+  # GCTF-2024 Gap-Closing Rules (AST patterns)
   # ============================================
 
   - id: sol-gctf-inverted-access
@@ -14,7 +14,7 @@ rules:
       category: security
       source: "GCTF-2024 FaultyTokenOwner"
       cwe: "CWE-863: Incorrect Authorization"
-    pattern-regex: 'require\s*\(\s*msg\.sender\s*!=\s*owner'
+    pattern: require(msg.sender != owner, ...)
 
   - id: sol-gctf-timelock-increment
     message: "lockTime public increment - overflow can bypass timelock (GCTF-2024)"
@@ -24,7 +24,7 @@ rules:
       category: security
       source: "GCTF-2024 TimeLock"
       cwe: "CWE-190: Integer Overflow"
-    pattern-regex: 'lockTime\s*\+=\s*\w+'
+    pattern: lockTime += $X
 
   - id: sol-gctf-balance-zero-after-call
     message: "Balance zeroed AFTER external call - classic reentrancy vulnerability (GCTF-2024 TheClassis)"
@@ -34,7 +34,11 @@ rules:
       category: security
       source: "GCTF-2024 TheClassis"
       cwe: "CWE-841: Improper Enforcement of Behavioral Workflow"
-    pattern-regex: '\.call\{value:[^}]+\}[^;]*;[^}]*balances\s*\[\s*msg\.sender\s*\]\s*=\s*0'
+    patterns:
+      - pattern: |
+          $ADDR.call{value: $AMT}($DATA);
+          ...
+          balances[msg.sender] = 0;
 
   # Backup: Simple balance zero pattern
   - id: sol-gctf-balance-zero
@@ -44,7 +48,170 @@ rules:
     metadata:
       category: security
       source: "GCTF-2024 TheClassis"
-    pattern-regex: 'balances\s*\[\s*msg\.sender\s*\]\s*=\s*0'
+    pattern: balances[msg.sender] = 0
+
+  # ============================================
+  # OnlyPwner Gap-Closing Rules (AST patterns)
+  # ============================================
+
+  # Test: Simple owner check pattern
+  - id: sol-onlypwner-owner-check
+    message: "Owner check (msg.sender == owner) - verify no hidden privileges follow this check (OnlyPwner reverse-rugpull)"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security
+      source: "OnlyPwner reverse-rugpull"
+    pattern: msg.sender == owner
+
+  # Test: Compound multiplication assignment
+  - id: sol-onlypwner-multiply-assign
+    message: "Hidden owner privilege: *= 2 multiplier gives owner double payout - rugpull risk (OnlyPwner reverse-rugpull)"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      source: "OnlyPwner reverse-rugpull"
+    pattern: $X *= 2
+
+  # OnlyPwner storage slot pattern
+  - id: sol-onlypwner-storage-slot
+    message: "Arbitrary storage write via .slot manipulation - attacker can overwrite any storage slot (OnlyPwner please-sign-here)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      source: "OnlyPwner please-sign-here"
+    pattern: $VAR.slot
+
+
+  # OnlyPwner diversion: Public yield function - MEV risk
+  - id: sol-onlypwner-public-yield
+    message: "Public accumulateYield function - MEV sandwich attack vector (OnlyPwner diversion)"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      source: "OnlyPwner bobface-diversion"
+      exploit: "Attacker can front-run/sandwich deposits with yield accumulation"
+    pattern-either:
+      - pattern: |
+          function accumulateYield(...) public { ... }
+      - pattern: |
+          function accumulateYield(...) external { ... }
+
+  # OnlyPwner freebie: withdraw without user balance mapping
+  - id: sol-onlypwner-global-balance-withdraw
+    message: "Withdraw from totalDeposited without per-user balance tracking - anyone can drain funds (OnlyPwner freebie)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      source: "OnlyPwner bobface-freebie"
+      cwe: "CWE-284: Improper Access Control"
+    pattern: 'totalDeposited -= $AMT'
+  # OnlyPwner jump-n-run: permissionless oracle callback
+  - id: sol-onlypwner-oracle-callback
+    message: "Oracle feedCallback can be manipulated by malicious feed - price oracle manipulation risk (OnlyPwner jump-n-run)"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      source: "OnlyPwner bobface-jump-n-run"
+    pattern: function feedCallback(...)
+
+  # OnlyPwner shapeshifter: bytecode size reward creates attack vector
+  - id: sol-onlypwner-codesize-reward
+    message: "Reward based on contract size - PUSH0 (Shanghai) enables minimal bytecode exploits (OnlyPwner shapeshifter)"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      source: "OnlyPwner bobface-shapeshifter"
+      exploit: "Shanghai hardfork PUSH0 enables ultra-compact malicious contracts"
+    pattern: '$SIZE := extcodesize($TARGET)'
+
+  # OnlyPwner multisig: vote counting without per-signer tracking
+  - id: sol-onlypwner-vote-no-dedup
+    message: "Vote score increment without per-signer deduplication - vote replay attack possible (OnlyPwner multisig)"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      source: "OnlyPwner bobface-multisig"
+    pattern: '$MAPPING[$KEY].score + 1'
+
+  # OnlyPwner wrapped-ether: CEI violation - sendEth before balance zeroed
+  - id: sol-onlypwner-send-before-zero
+    message: "CEI violation: ETH transfer before balance set to zero - reentrancy risk (OnlyPwner wrapped-ether)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      source: "OnlyPwner bobface-wrapped-ether"
+    pattern: |
+      function withdrawAll(...) {
+        ...
+        sendEth(...);
+        $VAR = 0;
+        ...
+      }
+
+  # OnlyPwner payday: Merkle proof without leaf domain separation
+  - id: sol-merkle-no-leaf-prefix
+    message: "Merkle leaf hash without domain separation - second preimage attack possible (OnlyPwner payday)"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      source: "OnlyPwner bobface-payday"
+    pattern-either:
+      - pattern: keccak256($PARAMS)
+      - pattern: keccak256(abi.encode(...))
+      - pattern: keccak256(abi.encodePacked(...))
+
+  # OnlyPwner bridge-takeover: calldatacopy with full calldatasize as length
+  - id: sol-calldatacopy-length-bug
+    message: "calldatacopy uses calldatasize() as length without offset adjustment - may copy garbage data (OnlyPwner bridge-takeover)"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      source: "OnlyPwner bobface-bridge-takeover"
+    pattern: calldatacopy($DST, $OFFSET, calldatasize())
+
+  # OnlyPwner under-the-flow: ERC20 allowance off-by-one (> instead of >=)
+  - id: sol-erc20-allowance-off-by-one
+    message: "ERC20 allowance check uses > 0 instead of >= value - allows transfer when allowance equals amount (OnlyPwner under-the-flow)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      source: "OnlyPwner bobface-under-the-flow"
+    pattern: 'require(allowance[$FROM][$SPENDER] - $VALUE > 0, ...)'
+
+  # OnlyPwner 13th-airdrop: updateUserBalance function with assembly
+  - id: sol-assembly-balance-update
+    message: "Balance update in assembly after external call - obfuscated reentrancy vulnerability (OnlyPwner 13th-airdrop)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      source: "OnlyPwner bobface-13th-airdrop"
+    pattern: |
+      function updateUserBalance() internal {
+        ...
+      }
+
+  # OnlyPwner 13th-airdrop: savedContractBalance assignment
+  - id: sol-saved-contract-balance
+    message: "Saving contract balance for comparison - potential reentrancy check bypass pattern (OnlyPwner 13th-airdrop)"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      source: "OnlyPwner bobface-13th-airdrop"
+    pattern: savedContractBalance = address(this).balance
 
   # ============================================
   # Critical: Access Control

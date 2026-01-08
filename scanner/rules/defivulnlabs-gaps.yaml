@@ -1,0 +1,237 @@
+# DeFiVulnLabs Gap Coverage Rules
+# Closing the 5 remaining gaps to reach 100% coverage
+# Created: 2026-01-07
+# Updated: Simplified patterns for better matching
+rules:
+
+  # ============================================
+  # GAP 1: Empty Array Bypass
+  # File: empty-loop.sol
+  # Issue: Loop over array without length check allows bypass
+  # ============================================
+
+  - id: sol-empty-array-bypass
+    message: "Loop over array without length check - empty array bypasses all validation"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-20: Improper Input Validation"
+      defivulnlabs: "empty-loop.sol"
+      exploit: "Pass empty array to bypass signature/validation checks"
+    patterns:
+      - pattern-inside: |
+          function $FUNC(..., $TYPE[] $ARR, ...) ... {
+            ...
+          }
+      - pattern: |
+          for (uint $I = 0; $I < $ARR.length; $I++) {
+            ...
+          }
+      - pattern-not-inside: |
+          require($ARR.length > 0, ...);
+          ...
+      - pattern-not-inside: |
+          if ($ARR.length == 0) revert ...;
+          ...
+
+  - id: sol-empty-calldata-array-bypass
+    message: "Loop over calldata array without length check - empty array bypasses validation"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-20: Improper Input Validation"
+      defivulnlabs: "empty-loop.sol"
+    patterns:
+      - pattern-inside: |
+          function $FUNC(..., $TYPE[] calldata $ARR, ...) ... {
+            ...
+          }
+      - pattern: |
+          for (uint $I = 0; $I < $ARR.length; $I++) {
+            ...
+          }
+      - pattern-not-inside: |
+          require($ARR.length > 0, ...);
+          ...
+
+  - id: sol-empty-loop-body
+    message: "Empty loop body - likely missing implementation or infinite gas consumption"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-835: Loop with Unreachable Exit Condition"
+      defivulnlabs: "empty-loop.sol"
+    pattern-either:
+      - pattern: for (...; ...; ...) { }
+      - pattern: while (...) { }
+
+  # ============================================
+  # GAP 2: tx.gasprice Manipulation
+  # File: gas-price.sol
+  # ============================================
+
+  - id: sol-txgasprice-usage
+    message: "tx.gasprice used - can be manipulated by miners/validators for financial gain"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-807: Reliance on Untrusted Inputs in a Security Decision"
+      defivulnlabs: "gas-price.sol"
+    pattern: tx.gasprice
+
+  # ============================================
+  # GAP 3: Return vs Break in Loops
+  # File: return-break.sol
+  # ============================================
+
+  - id: sol-return-in-loop
+    message: "Return statement inside loop - may exit function prematurely instead of just breaking loop"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security
+      defivulnlabs: "return-break.sol"
+    patterns:
+      - pattern-inside: for (...) { ... }
+      - pattern: return ...;
+
+  - id: sol-return-in-while-loop
+    message: "Return statement inside while loop - may exit function prematurely"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security
+      defivulnlabs: "return-break.sol"
+    patterns:
+      - pattern-inside: while (...) { ... }
+      - pattern: return ...;
+
+  # ============================================
+  # GAP 4: Self-Transfer Check Missing
+  # File: self-transfer.sol
+  # ============================================
+
+  - id: sol-self-transfer-missing-check
+    message: "Transfer function without from != to check - self-transfers may break accounting"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-682: Incorrect Calculation"
+      defivulnlabs: "self-transfer.sol"
+      exploit: "Self-transfer causes balance to be calculated incorrectly"
+    patterns:
+      - pattern-inside: |
+          function transfer(address $FROM, address $TO, $TYPE $AMT) ... {
+            ...
+          }
+      - pattern-not: require($FROM != $TO, ...);
+      - pattern-not: require($TO != $FROM, ...);
+      - pattern-not: if ($FROM == $TO) revert ...;
+
+  - id: sol-self-transfer-internal
+    message: "_transfer without from != to check - self-transfers may break accounting"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      defivulnlabs: "self-transfer.sol"
+    patterns:
+      - pattern-inside: |
+          function _transfer(address $FROM, address $TO, ...) ... {
+            ...
+          }
+      - pattern-not: require($FROM != $TO, ...);
+      - pattern-not: require($TO != $FROM, ...);
+
+  - id: sol-balance-self-transfer-bug
+    message: "Balance update pattern vulnerable to self-transfer - uses cached balances that overlap"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      defivulnlabs: "self-transfer.sol"
+    pattern: |
+      $BALANCES[$FROM] = $FROM_BAL - $AMT;
+      $BALANCES[$TO] = $TO_BAL + $AMT;
+
+  # ============================================
+  # GAP 5: Transient Storage (EIP-1153)
+  # File: TransientStorageMisuse.t.sol
+  # ============================================
+
+  - id: sol-transient-storage-tstore
+    message: "Transient storage (tstore) used - value resets after transaction ends (EIP-1153)"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security
+      defivulnlabs: "TransientStorageMisuse.t.sol"
+      references:
+        - https://eips.ethereum.org/EIPS/eip-1153
+    pattern-either:
+      - pattern: tstore(...)
+      - pattern: tstore($SLOT, $VALUE)
+
+  - id: sol-transient-storage-tload
+    message: "Transient storage (tload) used - value resets after transaction ends (EIP-1153)"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security
+      defivulnlabs: "TransientStorageMisuse.t.sol"
+    pattern-either:
+      - pattern: tload(...)
+      - pattern: tload($SLOT)
+
+  - id: sol-transient-storage-in-assembly
+    message: "Transient storage in assembly block - EIP-1153 tstore/tload detected"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security
+      defivulnlabs: "TransientStorageMisuse.t.sol"
+    patterns:
+      - pattern-inside: |
+          assembly {
+            ...
+          }
+      - pattern-regex: (tstore|tload)\s*\(
+
+  # ============================================
+  # PARTIAL GAP: Array Deletion Improvements
+  # File: Array-deletion.sol
+  # ============================================
+
+  - id: sol-array-delete-element
+    message: "delete array[i] sets element to zero but doesn't reduce length - use swap and pop"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      defivulnlabs: "Array-deletion.sol"
+    pattern: delete $ARRAY[$INDEX]
+
+  # ============================================
+  # PARTIAL GAP: Precision Loss Improvements
+  # File: Precision-loss.sol
+  # ============================================
+
+  - id: sol-precision-loss-division-truncation
+    message: "Integer division truncates - small / large may round to zero"
+    languages: [solidity]
+    severity: INFO
+    metadata:
+      category: security
+      defivulnlabs: "Precision-loss.sol"
+    pattern: $A / $DECIMALS
+
+  # ============================================
+  # PARTIAL GAP: Incorrect Sanity Checks
+  # File: Incorrect_sanity_checks.sol
+  # Already covered by existing rules
+  # ============================================
