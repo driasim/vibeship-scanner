@@ -54,19 +54,25 @@ rules:
   # OnlyPwner Gap-Closing Rules (AST patterns)
   # ============================================
 
-  # Test: Simple owner check pattern
-  - id: sol-onlypwner-owner-check
-    message: "Owner check (msg.sender == owner) - verify no hidden privileges follow this check (OnlyPwner reverse-rugpull)"
+  # reverse-rugpull: Owner gets 2x payout - hidden privilege
+  - id: sol-onlypwner-owner-double-payout
+    message: "CRITICAL: Owner gets 2x payout via *= 2 multiplier - vault drain vulnerability (OnlyPwner reverse-rugpull)"
     languages: [solidity]
-    severity: INFO
+    severity: ERROR
     metadata:
       category: security
-      source: "OnlyPwner reverse-rugpull"
-    pattern: msg.sender == owner
+      source: "OnlyPwner bobface-reverse-rugpull"
+      cwe: "CWE-284: Improper Access Control"
+      exploit: "Owner deposits, then withdraws 2x their share, draining vault"
+    patterns:
+      - pattern: |
+          if (msg.sender == owner) {
+            $PAYOUT *= 2;
+          }
 
-  # Test: Compound multiplication assignment
-  - id: sol-onlypwner-multiply-assign
-    message: "Hidden owner privilege: *= 2 multiplier gives owner double payout - rugpull risk (OnlyPwner reverse-rugpull)"
+  # reverse-rugpull: Backup pattern for *= 2 anywhere
+  - id: sol-onlypwner-multiply-assign-2
+    message: "Suspicious *= 2 multiplier - check for hidden owner privileges (OnlyPwner)"
     languages: [solidity]
     severity: WARNING
     metadata:
@@ -74,31 +80,41 @@ rules:
       source: "OnlyPwner reverse-rugpull"
     pattern: $X *= 2
 
-  # OnlyPwner storage slot pattern
-  - id: sol-onlypwner-storage-slot
-    message: "Arbitrary storage write via .slot manipulation - attacker can overwrite any storage slot (OnlyPwner please-sign-here)"
+  # please-sign-here: Arbitrary storage slot from user input
+  - id: sol-onlypwner-arbitrary-storage-slot
+    message: "Storage slot derived from user-controlled address - arbitrary storage write vulnerability (OnlyPwner please-sign-here)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      source: "OnlyPwner bobface-please-sign-here"
+      cwe: "CWE-787: Out-of-bounds Write"
+      exploit: "Signer address controls storage slot, can overwrite owner/isFinished"
+    pattern: bytes32 $SLOT = bytes32(uint256(uint160($SIGNER)))
+
+  # please-sign-here: Assembly slot assignment
+  - id: sol-onlypwner-assembly-slot-assign
+    message: "Assembly assigns .slot from variable - arbitrary storage write possible (OnlyPwner please-sign-here)"
     languages: [solidity]
     severity: ERROR
     metadata:
       category: security
       source: "OnlyPwner please-sign-here"
-    pattern: $VAR.slot
+    pattern-regex: '\.\s*slot\s*:='
 
-
-  # OnlyPwner diversion: Public yield function - MEV risk
-  - id: sol-onlypwner-public-yield
-    message: "Public accumulateYield function - MEV sandwich attack vector (OnlyPwner diversion)"
+  # diversion: Public yield accumulation function - MEV attack vector
+  - id: sol-onlypwner-public-accumulate-yield
+    message: "Public accumulateYield function enables MEV sandwich attacks - whale can deposit, trigger yield, withdraw (OnlyPwner diversion)"
     languages: [solidity]
-    severity: WARNING
+    severity: ERROR
     metadata:
       category: security
       source: "OnlyPwner bobface-diversion"
-      exploit: "Attacker can front-run/sandwich deposits with yield accumulation"
-    pattern-either:
-      - pattern: |
-          function accumulateYield(...) public { ... }
-      - pattern: |
-          function accumulateYield(...) external { ... }
+      exploit: "Attacker sandwiches: deposit -> accumulateYield -> withdraw"
+    pattern: |
+      function accumulateYield(...) public {
+        ...
+      }
 
   # OnlyPwner freebie: withdraw without user balance mapping
   - id: sol-onlypwner-global-balance-withdraw
@@ -143,7 +159,26 @@ rules:
 
   # OnlyPwner wrapped-ether: CEI violation - sendEth before balance zeroed
   - id: sol-onlypwner-send-before-zero
-    message: "CEI violation: ETH transfer before balance set to zero - reentrancy risk (OnlyPwner wrapped-ether)"
+    message: "CEI violation: ETH transfer before balance zeroed - reentrancy vulnerability (OnlyPwner wrapped-ether)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      source: "OnlyPwner bobface-wrapped-ether"
+      cwe: "CWE-841: Improper Enforcement of Behavioral Workflow"
+      exploit: "Attacker reenters during sendEth, balance not yet zeroed"
+    patterns:
+      - pattern: |
+          sendEth(...);
+          ...
+          $BALANCE[$ADDR] = 0;
+      - pattern: |
+          sendEth(..., balanceOf[$ADDR]);
+          balanceOf[$ADDR] = 0;
+
+  # wrapped-ether: Specific withdrawAll CEI pattern
+  - id: sol-onlypwner-withdrawall-cei
+    message: "withdrawAll sends ETH before zeroing balance - classic reentrancy (OnlyPwner wrapped-ether)"
     languages: [solidity]
     severity: ERROR
     metadata:
@@ -152,8 +187,8 @@ rules:
     pattern: |
       function withdrawAll(...) {
         ...
-        sendEth(...);
-        $VAR = 0;
+        sendEth(payable(msg.sender), balanceOf[msg.sender]);
+        balanceOf[msg.sender] = 0;
         ...
       }
 
