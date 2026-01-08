@@ -8,6 +8,7 @@ rules:
   # ============================================
 
   # TimeLock: lockTime += _secondsToIncrease (public unchecked increment)
+  # Using pattern-regex for reliable matching
   - id: sol-timelock-increment-overflow
     message: "Public function increments lockTime without bounds - can overflow to bypass timelock (GCTF-2024 TimeLock)"
     languages: [solidity]
@@ -15,11 +16,11 @@ rules:
     metadata:
       category: security
       cwe: "CWE-190: Integer Overflow"
-      source: "GCTF-2024 TimeLock - EXACT MATCH"
+      source: "GCTF-2024 TimeLock"
       exploit: "User passes MAX_UINT to overflow lockTime, making it smaller than block.timestamp"
-    pattern: lockTime += $VAR
+    pattern-regex: 'lockTime\s*\+=\s*\w+'
 
-  # TheClassis: State zeroed after call (simple pattern - just detect the zero assignment)
+  # TheClassis: State zeroed after call - classic reentrancy
   - id: sol-reentrancy-balance-zero
     message: "Balance set to zero - verify this happens BEFORE external calls to prevent reentrancy (GCTF-2024 TheClassis)"
     languages: [solidity]
@@ -28,7 +29,7 @@ rules:
       category: security
       cwe: "CWE-841: Improper Enforcement of Behavioral Workflow"
       source: "GCTF-2024 TheClassis"
-    pattern: balances[msg.sender] = 0
+    pattern-regex: 'balances\s*\[\s*msg\.sender\s*\]\s*=\s*0'
 
   # Token_Bonanza: require(msg.sender != owner) - INVERTED check
   - id: sol-access-control-inverted-check
@@ -38,9 +39,9 @@ rules:
     metadata:
       category: security
       cwe: "CWE-863: Incorrect Authorization"
-      source: "GCTF-2024 Token_Bonanza FaultyTokenOwner - EXACT MATCH"
+      source: "GCTF-2024 Token_Bonanza FaultyTokenOwner"
       exploit: "Modifier checks msg.sender != owner, so non-owners can mint tokens"
-    pattern: require(msg.sender != owner, ...)
+    pattern-regex: 'require\s*\(\s*msg\.sender\s*!=\s*owner'
 
   - id: sol-timelock-overflow-bypass
     message: "Timelock duration added to block.timestamp may overflow - attacker can bypass waiting period"

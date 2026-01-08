@@ -3,7 +3,7 @@
 rules:
 
   # ============================================
-  # GCTF-2024 Gap-Closing Rules (LITERAL MATCHING)
+  # GCTF-2024 Gap-Closing Rules (pattern-regex for reliable matching)
   # ============================================
 
   - id: sol-gctf-inverted-access
@@ -13,7 +13,8 @@ rules:
     metadata:
       category: security
       source: "GCTF-2024 FaultyTokenOwner"
-    pattern: require(msg.sender != owner, ...)
+      cwe: "CWE-863: Incorrect Authorization"
+    pattern-regex: 'require\s*\(\s*msg\.sender\s*!=\s*owner'
 
   - id: sol-gctf-timelock-increment
     message: "lockTime public increment - overflow can bypass timelock (GCTF-2024)"
@@ -22,16 +23,28 @@ rules:
     metadata:
       category: security
       source: "GCTF-2024 TimeLock"
-    pattern: lockTime += $X
+      cwe: "CWE-190: Integer Overflow"
+    pattern-regex: 'lockTime\s*\+=\s*\w+'
 
+  - id: sol-gctf-balance-zero-after-call
+    message: "Balance zeroed AFTER external call - classic reentrancy vulnerability (GCTF-2024 TheClassis)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      source: "GCTF-2024 TheClassis"
+      cwe: "CWE-841: Improper Enforcement of Behavioral Workflow"
+    pattern-regex: '\.call\{value:[^}]+\}[^;]*;[^}]*balances\s*\[\s*msg\.sender\s*\]\s*=\s*0'
+
+  # Backup: Simple balance zero pattern
   - id: sol-gctf-balance-zero
-    message: "Balance zeroed - ensure this happens BEFORE external calls (GCTF-2024 TheClassis)"
+    message: "Balance set to zero - verify this happens BEFORE external calls (GCTF-2024)"
     languages: [solidity]
     severity: WARNING
     metadata:
       category: security
       source: "GCTF-2024 TheClassis"
-    pattern: balances[msg.sender] = 0
+    pattern-regex: 'balances\s*\[\s*msg\.sender\s*\]\s*=\s*0'
 
   # ============================================
   # Critical: Access Control
