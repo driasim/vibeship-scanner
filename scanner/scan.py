@@ -635,7 +635,17 @@ def run_opengrep(repo_dir: str, detected_languages: List[str] = None) -> List[Di
                 print(f"Running {scan_name}: {len(configs)//2} rule files on {len(target)} files", file=sys.stderr)
             else:
                 print(f"Running {scan_name}: {len(configs)//2} rule files on {target}", file=sys.stderr)
+            # Debug: print first 800 chars of command for base-scan
+            if scan_name == "base-scan":
+                cmd_str = ' '.join(cmd)
+                print(f"  base-scan cmd (first 800): {cmd_str[:800]}", file=sys.stderr)
+                # Print rule files specifically
+                rule_files = [c for i, c in enumerate(cmd) if i > 0 and cmd[i-1] == '-f']
+                print(f"  base-scan rule files: {rule_files}", file=sys.stderr)
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            # Debug: check stderr for rule validation errors
+            if result.stderr and scan_name == "base-scan":
+                print(f"  base-scan stderr: {result.stderr[:500]}", file=sys.stderr)
 
             if result.stdout:
                 try:

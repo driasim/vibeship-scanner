@@ -337,11 +337,19 @@ def start_scan():
     repo_url = data.get('repoUrl')
     branch = data.get('branch', 'main')
     github_token = data.get('githubToken')
+    benchmark_mode = data.get('benchmarkMode', False)
 
-    print(f"[Scanner] Received scan request: scanId={scan_id}, repo={repo_url}, hasToken={bool(github_token)}", flush=True)
+    print(f"[Scanner] Received scan request: scanId={scan_id}, repo={repo_url}, hasToken={bool(github_token)}, benchmarkMode={benchmark_mode}", flush=True)
 
     if not scan_id or not repo_url:
         return jsonify({'error': 'Missing scanId or repoUrl'}), 400
+
+    # Set benchmark mode environment variable if requested
+    if benchmark_mode:
+        os.environ['BENCHMARK_MODE'] = '1'
+        print(f"[Scanner] BENCHMARK_MODE enabled - test path filtering disabled", flush=True)
+    else:
+        os.environ.pop('BENCHMARK_MODE', None)
 
     thread = threading.Thread(target=run_scan, args=(scan_id, repo_url, branch, github_token))
     thread.start()

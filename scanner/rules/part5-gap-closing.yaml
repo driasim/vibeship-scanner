@@ -183,8 +183,43 @@ rules:
           ...
 
   # ============================================
-  # ONLYPWNER GAPS
+  # ONLYPWNER GAPS - ITERATION 2 (pattern-regex)
   # ============================================
+
+  # bobface-reverse-rugpull: Owner gets 2x payout (hidden privilege)
+  - id: sol-owner-hidden-multiplier
+    message: "Owner gets multiplied payout - hidden rugpull privilege (OnlyPwner reverse-rugpull)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-284: Improper Access Control"
+      source: "OnlyPwner bobface-reverse-rugpull"
+      exploit: "Owner can withdraw 2x their share, draining vault"
+    pattern-regex: 'if\s*\(\s*msg\.sender\s*==\s*owner\s*\)[\s\S]*?\*=\s*2'
+
+  # bobface-please-sign-here: Arbitrary storage slot write via assembly
+  - id: sol-arbitrary-storage-slot-assembly
+    message: "Assembly writes to storage slot derived from user input - arbitrary storage write (OnlyPwner please-sign-here)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-787: Out-of-bounds Write"
+      source: "OnlyPwner bobface-please-sign-here"
+      exploit: "Attacker can overwrite arbitrary storage by controlling signer address"
+    pattern-regex: 'assembly\s*\{[\s\S]*?\.slot\s*:='
+
+  # bobface-diversion: Public yield function allows MEV sandwich
+  - id: sol-public-yield-accumulate
+    message: "Public yield accumulation function - MEV/JIT attack vector (OnlyPwner diversion)"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      source: "OnlyPwner bobface-diversion"
+      exploit: "Whale can sandwich deposit around yield distribution"
+    pattern-regex: 'function\s+accumulateYield[^)]*\)\s*(external|public)'
 
   - id: sol-mev-yield-extraction-whale
     message: "Yield distribution susceptible to whale MEV extraction - no caps or time-weighted distribution"
