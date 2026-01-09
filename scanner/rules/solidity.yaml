@@ -6786,4 +6786,19 @@ rules:
       source: "Trail of Bits CTF grehack-2017 Casino"
     pattern-regex: 'function\s+guessNumber\s*\('
 
+  # ============================================
+  # CSAW-2017 ETHERSNOOB - Integer Overflow
+  # ============================================
+
+  # ETHERSNOOB: Exponentiation overflow in Solidity 0.4
+  - id: sol-exponentiation-overflow
+    message: "Exponentiation with user input can overflow in Solidity <0.8 - use SafeMath or bounds check (Trail of Bits ETHERSNOOB)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-190: Integer Overflow or Wraparound"
+      source: "Trail of Bits CTF CSAW-2017 ETHERSNOOB"
+    pattern-regex: '\w+\s*\*\*\s*\w+'
+
 # Force rebuild Thu, Jan  9, 2026  1:10:00 PM
