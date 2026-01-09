@@ -461,3 +461,147 @@ rules:
             ...
           }
 
+  # ============================================
+  # TRAIL OF BITS CTF GAPS (grehack-2017)
+  # ============================================
+
+  # Bank.sol: Old Solidity 0.4 reentrancy pattern with call.value()
+  - id: sol-call-value-reentrancy-legacy
+    message: "Legacy .call.value()() used for ETH transfer - verify CEI pattern to prevent reentrancy (Trail of Bits Bank)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-841: Improper Enforcement of Behavioral Workflow"
+      source: "Trail of Bits CTF grehack-2017 Bank"
+      exploit: "call.value() triggers fallback, balance update happens after, reentrancy possible"
+    pattern-regex: '\.call\.value\s*\([^)]*\)\s*\(\s*\)'
+
+  - id: sol-call-value-before-state-update
+    message: "ETH sent via call.value() before balance decrement - classic reentrancy (Trail of Bits Bank)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-841: Improper Enforcement of Behavioral Workflow"
+      source: "Trail of Bits CTF grehack-2017 Bank"
+    patterns:
+      - pattern: |
+          msg.sender.call.value($AMT)()
+      - pattern-not-inside: |
+          $BALANCE[$USER] -= $AMT;
+          ...
+          msg.sender.call.value($AMT)()
+
+  # Bounty.sol: Wrong variable bug - rewards[msg.sender] instead of rewards[chall]
+  - id: sol-wrong-mapping-key-param-vs-sender
+    message: "Reading rewards[msg.sender] but function has address parameter - likely wrong variable (Trail of Bits Bounty)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-480: Use of Incorrect Operator"
+      source: "Trail of Bits CTF grehack-2017 Bounty"
+      exploit: "Solver gets 0 reward because rewards[msg.sender] is empty, should use rewards[chall]"
+    patterns:
+      - pattern-inside: |
+          function $FUNC(address $PARAM, ...) {
+            ...
+          }
+      - pattern: |
+          $MAPPING[msg.sender]
+      - metavariable-regex:
+          metavariable: $FUNC
+          regex: '(bounty|solve|claim|redeem)'
+
+  - id: sol-reward-from-wrong-address
+    message: "Reward calculated from msg.sender's balance when param address intended - wrong variable bug"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      source: "Trail of Bits CTF grehack-2017 Bounty.sol:67"
+      exploit: "rewards[msg.sender] is 0, should be rewards[chall]"
+    pattern-regex: 'uint\s+reward\s*=\s*rewards\s*\[\s*msg\.sender\s*\]'
+
+  # GreHackCoin.sol: Backwards initialization check
+  - id: sol-init-backwards-zero-check
+    message: "Initialization check uses != 0 - allows re-init when already set (Trail of Bits GreHackCoin)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-284: Improper Access Control"
+      source: "Trail of Bits CTF grehack-2017 GreHackCoin"
+      exploit: "if(address(x)!=0x0) allows overwrite when x is set, should be ==0x0"
+    pattern-regex: 'if\s*\(\s*address\s*\([^)]+\)\s*!=\s*(0x0|0|address\(0\))\s*\)'
+
+  - id: sol-owner-contract-overwritable
+    message: "Owner contract can be overwritten via initOwner - access control bypass (Trail of Bits GreHackCoin)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-284: Improper Access Control"
+      source: "Trail of Bits CTF grehack-2017 GreHackCoin"
+    patterns:
+      - pattern: |
+          function initOwner(address $C) {
+            ...
+            $OWNER = $TYPE($C);
+            ...
+          }
+      - pattern-not-inside: |
+          function initOwner(address $C) ... onlyOwner ... {
+            ...
+          }
+      - pattern-not-inside: |
+          require(address($OWNER) == address(0), ...);
+          ...
+
+  # Casino.sol: Weak randomness / frontrunning
+  - id: sol-owner-controlled-randomness
+    message: "Owner sets 'random' number via sendNumber - not random, can be front-run (Trail of Bits Casino)"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-330: Use of Insufficiently Random Values"
+      source: "Trail of Bits CTF grehack-2017 Casino"
+    patterns:
+      - pattern: |
+          function sendNumber($TYPE $RANDOM, ...) ... {
+            require(msg.sender == owner, ...);
+            ...
+            $MAPPING[$ADDR] = $RANDOM;
+            ...
+          }
+
+  - id: sol-guess-game-frontrun
+    message: "Guess game with owner-set number is frontrunnable - anyone can see sendNumber tx"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      source: "Trail of Bits CTF grehack-2017 Casino"
+    pattern-regex: 'function\s+guessNumber\s*\('
+
+  # Variable shadowing (GreHackCoin has owner in both Owner and FuturOwner)
+  - id: sol-variable-shadowing-owner
+    message: "Variable 'owner' shadows parent contract's owner - can cause confusion"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-710: Improper Adherence to Coding Standards"
+      source: "Trail of Bits CTF grehack-2017 GreHackCoin"
+    patterns:
+      - pattern-inside: |
+          contract $CHILD is $PARENT {
+            address owner;
+            ...
+          }
+      - metavariable-regex:
+          metavariable: $PARENT
+          regex: '(Owner|Ownable|Owned)'
+

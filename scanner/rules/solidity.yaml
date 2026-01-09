@@ -6737,4 +6737,53 @@ rules:
           require($X <= type(uint128).max, ...);
           ...
 
-# Force rebuild Thu, Jan  8, 2026  3:59:42 AM
+  # ============================================
+  # TRAIL OF BITS CTF GAPS (grehack-2017)
+  # Old Solidity 0.4 patterns
+  # ============================================
+
+  # Bank.sol: Old Solidity 0.4 reentrancy pattern with call.value()
+  - id: sol-call-value-legacy-reentrancy
+    message: "Legacy .call.value()() used for ETH transfer - verify CEI pattern to prevent reentrancy (Trail of Bits Bank)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-841: Improper Enforcement of Behavioral Workflow"
+      source: "Trail of Bits CTF grehack-2017 Bank"
+    pattern-regex: '\.call\.value\s*\([^)]*\)\s*\(\s*\)'
+
+  # Bounty.sol: Wrong variable bug - rewards[msg.sender] instead of rewards[chall]
+  - id: sol-reward-wrong-variable
+    message: "Reward calculated from msg.sender's balance when param address intended - wrong variable bug (Trail of Bits Bounty)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-480: Use of Incorrect Operator"
+      source: "Trail of Bits CTF grehack-2017 Bounty.sol:67"
+    pattern-regex: 'uint\s+reward\s*=\s*rewards\s*\[\s*msg\.sender\s*\]'
+
+  # GreHackCoin.sol: Backwards initialization check
+  - id: sol-init-backwards-check
+    message: "Initialization check uses != 0 - allows re-init when already set (Trail of Bits GreHackCoin)"
+    languages: [solidity]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-284: Improper Access Control"
+      source: "Trail of Bits CTF grehack-2017 GreHackCoin"
+    pattern-regex: 'if\s*\(\s*address\s*\([^)]+\)\s*!=\s*(0x0|0|address\(0\))\s*\)'
+
+  # Casino.sol: Guess game frontrunnable
+  - id: sol-guess-game-frontrunnable
+    message: "Guess game with owner-set number is frontrunnable - anyone can see sendNumber tx (Trail of Bits Casino)"
+    languages: [solidity]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-330: Use of Insufficiently Random Values"
+      source: "Trail of Bits CTF grehack-2017 Casino"
+    pattern-regex: 'function\s+guessNumber\s*\('
+
+# Force rebuild Thu, Jan  9, 2026  1:10:00 PM
