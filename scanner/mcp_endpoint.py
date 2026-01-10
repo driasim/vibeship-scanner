@@ -134,7 +134,7 @@ TOOLS = [
     },
     {
         "name": "scanner_report_false_positive",
-        "description": "Report a false positive finding to help improve the scanner. Requires user consent. Data is sanitized to preserve privacy - no raw code is stored, only anonymized patterns.",
+        "description": "🔒 ULTRA PRIVACY: Report a false positive to help improve the scanner. We only receive: rule_id, language, reason_category. NO code, NO file paths, NO repo URLs - ever.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -145,13 +145,12 @@ TOOLS = [
                     "enum": ["safe_pattern", "framework_handled", "test_code", "intentional", "wrong_context", "other"],
                     "description": "Why this is a false positive: safe_pattern (code is actually safe), framework_handled (framework handles security), test_code (only in tests), intentional (developer's intentional choice), wrong_context (rule doesn't apply here), other"
                 },
-                "reason_detail": {"type": "string", "description": "Detailed explanation of why this is a false positive"},
+                "reason_detail": {"type": "string", "description": "Optional: Your explanation (this IS sent, so keep it generic)"},
                 "consent_level": {
                     "type": "integer",
                     "enum": [1, 2, 3],
-                    "description": "Privacy consent level: 1=anonymous (pattern only), 2=with_context (include surrounding code context), 3=full_share (include anonymized repo hash for correlation)"
-                },
-                "ai_analysis": {"type": "string", "description": "AI's analysis of why the finding is a false positive"}
+                    "description": "Privacy level (all levels now ultra-private - only metadata sent)"
+                }
             },
             "required": ["scan_id", "finding_index", "reason_category", "consent_level"]
         }
@@ -169,7 +168,7 @@ TOOLS = [
     },
     {
         "name": "scanner_preview_false_positive",
-        "description": "PRIVACY PREVIEW: See EXACTLY what data will be sent before reporting a false positive. Shows what gets sanitized and what remains. Always call this first so users can review before submitting.",
+        "description": "🔒 ULTRA PRIVACY PREVIEW: See EXACTLY what minimal data will be sent. Spoiler: only rule_id, language, reason. No code ever.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -180,11 +179,11 @@ TOOLS = [
                     "enum": ["safe_pattern", "framework_handled", "test_code", "intentional", "wrong_context", "other"],
                     "description": "Why this is a false positive"
                 },
-                "reason_detail": {"type": "string", "description": "Detailed explanation"},
+                "reason_detail": {"type": "string", "description": "Optional explanation"},
                 "consent_level": {
                     "type": "integer",
                     "enum": [1, 2, 3],
-                    "description": "Privacy level: 1=maximum privacy (pattern only), 2=with context, 3=full share"
+                    "description": "Privacy level (all are ultra-private now)"
                 }
             },
             "required": ["scan_id", "finding_index", "reason_category", "consent_level"]
@@ -545,9 +544,15 @@ def execute_status(args):
 
         # Return conversational response with clear next step
         return f"""
-╔══════════════════════════════════════════════════════════════════╗
-║  🎯 SCAN COMPLETE                                                 ║
-╚══════════════════════════════════════════════════════════════════╝
+               ~
+             ╱│
+           ╱╲ │
+         ╱   ╲│╲         VIBESHIP SCANNER
+       ╱  ╱╲  │ ╲        ════════════════
+     ╱  ╱   ╲ │  ╲       🎯 SCAN COMPLETE
+       ╱     ╲│
+   ═══╱═══════╧════
+     ∿∿ ∿∿ ∿∿ ∿∿ ∿∿
 
 📦 Repository: {repo_url}
 📊 Score: {score}/100 (Grade {grade})
@@ -1070,12 +1075,47 @@ def execute_master_prompt(args):
     # Build checklist markdown
     checklist_md = "\n\n".join(checklist_sections) if checklist_sections else "No items to fix!"
 
+    # Build task list for TodoWrite
+    task_list = []
+    for i, f in enumerate(deduplicated):
+        loc = f.get('location', {})
+        file_path = loc.get('file', 'unknown')
+        line = loc.get('line', '')
+        sev = f.get('severity', 'INFO').upper()
+        title = f.get('title', 'Unknown issue')[:50]
+        task_list.append(f"Fix #{i+1}: [{sev}] {title} in {file_path}:{line}" if line else f"Fix #{i+1}: [{sev}] {title} in {file_path}")
+
+    task_json = ',\n    '.join([f'{{"content": "{t}", "status": "pending", "activeForm": "Fixing security issue #{i+1}"}}' for i, t in enumerate(task_list[:30])])  # Cap at 30 tasks
+
     # Final prompt
     return f"""# Security Fix Guide
 
-I need help fixing security vulnerabilities in my codebase.
+               ~
+             ╱│
+           ╱╲ │
+         ╱   ╲│╲         VIBESHIP SCANNER
+       ╱  ╱╲  │ ╲        ════════════════
+     ╱  ╱   ╲ │  ╲       🛠️ FIX MODE
+       ╱     ╲│
+   ═══╱═══════╧════
+     ∿∿ ∿∿ ∿∿ ∿∿ ∿∿
 
 **Repository:** {repo_url}
+
+---
+
+## 🚨 CRITICAL: USE TODO LIST FOR TRACKING
+
+**YOU MUST use the TodoWrite tool to track these fixes systematically.**
+
+Call TodoWrite NOW with these tasks:
+```json
+[
+    {task_json}
+]
+```
+
+This ensures you fix ALL issues, not just the first few. Mark each as "in_progress" when starting, "completed" when done.
 
 ---
 
@@ -1084,32 +1124,16 @@ I need help fixing security vulnerabilities in my codebase.
 **Raw Findings:** {total_original} total
 {original_summary}
 
----
-
-## Actionable Issues
-
-After consolidating duplicate findings (same vulnerability in same file) and excluding informational items, you have **{unique_count} unique issues** to fix:
-
+**Actionable Issues:** {unique_count} unique issues to fix
 {dedup_summary}
 
 ---
 
 ## 📋 FIX CHECKLIST (0/{unique_count} completed)
 
-**IMPORTANT: Work through this checklist ONE ITEM AT A TIME.**
-Mark each item as complete `[x]` after fixing. Do NOT move to the next item until the current one is done.
+Work through this list ONE ITEM AT A TIME. After each fix, mark the todo as completed.
 
 {checklist_md}
-
----
-
-## Progress Tracking
-
-After each fix:
-1. Mark the checkbox `[x]` for the completed item
-2. Update the progress counter: `(1/{unique_count} completed)` → `(2/{unique_count} completed)` etc.
-3. Announce: "✅ Fixed #N - [brief description]. Progress: X/{unique_count}"
-4. Then proceed to the next unchecked item
 
 ---
 
@@ -1995,22 +2019,20 @@ def execute_report_false_positive(args):
             context += finding.get('context')
 
     try:
-        # Send raw data to feedback endpoint - server does its own sanitization
+        # ULTRA PRIVACY: Only send minimal metadata, NEVER any code or paths
         import requests
         feedback_url = "https://scanner-empty-field-5676.fly.dev/feedback/report"
 
+        # Privacy-first payload - NO code, NO file paths, NO repo URLs
+        # We only learn: "rule X was flagged as FP for reason Y"
         payload = {
-            'rule_id': rule_id,
-            'rule_message': rule_message,
-            'severity': severity,
-            'language': language,
-            'code_snippet': code_snippet,
-            'context': context,
-            'repo_url': repo_url if consent_level == 3 else None,
-            'reason_category': reason_category,
-            'reason_detail': reason_detail,
-            'ai_analysis': ai_analysis,
-            'consent_level': consent_level
+            'rule_id': rule_id,                    # Which rule triggered (e.g., "py-sql-injection")
+            'severity': severity,                   # Severity level only
+            'language': language,                   # Language only (python, javascript, etc.)
+            'reason_category': reason_category,     # Why it's FP (safe_pattern, test_code, etc.)
+            'reason_detail': reason_detail,         # User's explanation (optional, user-provided)
+            'consent_level': consent_level,         # Consent level for our records
+            # NEVER sent: code_snippet, context, repo_url, file_path, line numbers
         }
 
         response = requests.post(
@@ -2026,13 +2048,20 @@ def execute_report_false_positive(args):
                 "status": "success",
                 "message": "Thank you! Your false positive report has been submitted.",
                 "report_id": resp_data.get('id', 'unknown'),
-                "privacy_note": f"Your data was sanitized at consent level {consent_level} before submission.",
-                "what_happens_next": "Our team will review this report and may update the scanner rules to reduce false positives.",
-                "details": {
+                "privacy_guarantee": "🔒 ULTRA PRIVACY: We received ONLY the rule ID and reason category. No code, no file paths, no repository info was sent.",
+                "what_we_received": {
                     "rule_id": rule_id,
                     "reason": reason_category,
-                    "consent_level": consent_level
-                }
+                    "language": language
+                },
+                "what_we_did_NOT_receive": [
+                    "No code snippets",
+                    "No file paths",
+                    "No line numbers",
+                    "No repository URL",
+                    "No identifying information"
+                ],
+                "what_happens_next": "This helps us improve detection accuracy by knowing which rules produce false positives."
             }
         else:
             return {
@@ -2104,15 +2133,11 @@ def execute_check_known_false_positives(args):
 
 def execute_preview_false_positive(args):
     """
-    PRIVACY PREVIEW: Show users EXACTLY what will be sent before they submit.
+    ULTRA PRIVACY PREVIEW: Show users EXACTLY what will be sent.
 
-    This is the key transparency feature - users can see:
-    - What data WILL be sent (sanitized patterns)
-    - What data will NOT be sent (variable names, secrets, paths, etc.)
-    - How much data reduction occurs through sanitization
+    With ultra-privacy, we send virtually nothing - just rule ID and reason.
+    No code, no file paths, no line numbers, no repo info.
     """
-    from feedback.sanitizer import preview_feedback
-
     scan_id = args.get('scan_id')
     finding_index = args.get('finding_index', 0)
     reason_category = args.get('reason_category', 'other')
@@ -2122,12 +2147,9 @@ def execute_preview_false_positive(args):
     if not scan_id:
         return {"error": "scan_id is required"}
 
-    if consent_level not in [1, 2, 3]:
-        return {"error": "consent_level must be 1, 2, or 3"}
-
     # Fetch scan from Supabase
     supabase = get_supabase()
-    result = supabase.table('scans').select('findings, target_url').eq('id', scan_id).execute()
+    result = supabase.table('scans').select('findings').eq('id', scan_id).execute()
 
     if not result.data:
         return {"error": f"Scan not found: {scan_id}"}
@@ -2142,23 +2164,11 @@ def execute_preview_false_positive(args):
 
     finding = findings[finding_index]
 
-    # Extract finding details
+    # Extract only what we need for preview
     rule_id = finding.get('ruleId', finding.get('title', 'unknown'))
+    severity = finding.get('severity', 'INFO').upper()
     location = finding.get('location', {})
     file_path = location.get('file', 'unknown')
-    line = location.get('line', 0)
-
-    # Get code snippet from finding
-    # snippet can be a dict with 'code' key or a string
-    snippet = finding.get('snippet', {})
-    if isinstance(snippet, dict):
-        code_snippet = snippet.get('code', '')
-    else:
-        code_snippet = snippet or ''
-    if not code_snippet:
-        code_snippet = finding.get('code', '')
-    if not code_snippet:
-        code_snippet = f"// Line {line} in {file_path}\n// {finding.get('title', 'Unknown finding')}"
 
     # Detect language from file extension
     lang_map = {
@@ -2170,85 +2180,56 @@ def execute_preview_false_positive(args):
     ext = '.' + file_path.split('.')[-1] if '.' in file_path else ''
     language = lang_map.get(ext, 'unknown')
 
-    # Get context if consent level allows
-    context = None
-    if consent_level >= 2:
-        context = f"File: {file_path}\nLine: {line}\n"
-        if finding.get('context'):
-            context += finding.get('context')
-
-    try:
-        # Generate preview
-        preview = preview_feedback(
-            code_snippet=code_snippet,
-            context=context,
-            language=language,
-            consent_level=consent_level,
-            rule_id=rule_id,
-            reason_category=reason_category,
-            reason_detail=reason_detail
-        )
-
-        # Format for display
-        consent_descriptions = {
-            1: "MAXIMUM PRIVACY - Only anonymized pattern structure",
-            2: "WITH CONTEXT - Includes sanitized surrounding context",
-            3: "FULL SHARE - Slightly more detail (still heavily sanitized)"
-        }
-
-        return f"""
-╔══════════════════════════════════════════════════════════════════╗
-║  PRIVACY PREVIEW - Review Before Submitting                      ║
-╚══════════════════════════════════════════════════════════════════╝
-
-📋 FINDING DETAILS
-   Rule ID: {rule_id}
-   File: {file_path}
-   Line: {line}
-   Severity: {finding.get('severity', 'UNKNOWN').upper()}
-
-🔒 CONSENT LEVEL: {consent_level}
-   {consent_descriptions.get(consent_level, 'Unknown')}
+    return f"""
+               ~
+             ╱│
+           ╱╲ │
+         ╱   ╲│╲         VIBESHIP SCANNER
+       ╱  ╱╲  │ ╲        ════════════════
+     ╱  ╱   ╲ │  ╲       🔒 PRIVACY PREVIEW
+       ╱     ╲│
+   ═══╱═══════╧════
+     ∿∿ ∿∿ ∿∿ ∿∿ ∿∿
 
 ═══════════════════════════════════════════════════════════════════
-✅ WHAT WILL BE SENT (sanitized data only):
+✅ WHAT WILL BE SENT (this is ALL we receive):
 ═══════════════════════════════════════════════════════════════════
 
-   Rule ID: {preview['will_send']['rule_id']}
-   Language: {preview['will_send']['language']}
-   Reason: {preview['will_send']['reason_category']}
+   • Rule ID: {rule_id}
+   • Language: {language}
+   • Reason: {reason_category}
+   • Severity: {severity}
 
-   AST Structure (NO CODE):
-   {preview['will_send']['ast_structure']}
-
-   Structural Hints: {', '.join(preview['will_send']['structural_hints']) if preview['will_send']['structural_hints'] else 'None detected'}
-   Framework Hints: {', '.join(preview['will_send']['framework_hints']) if preview['will_send']['framework_hints'] else 'None detected'}
+   That's it. Nothing else.
 
 ═══════════════════════════════════════════════════════════════════
-❌ WHAT WILL NOT BE SENT (removed for your privacy):
+❌ WHAT WILL NOT BE SENT (100% private):
 ═══════════════════════════════════════════════════════════════════
 
-{chr(10).join('   - ' + item for item in preview['will_NOT_send'])}
+   • ❌ No code snippets
+   • ❌ No file paths (not even "{file_path}")
+   • ❌ No line numbers
+   • ❌ No repository URL
+   • ❌ No variable names
+   • ❌ No function names
+   • ❌ No class names
+   • ❌ No secrets or credentials
+   • ❌ No identifying information whatsoever
 
 ═══════════════════════════════════════════════════════════════════
-📊 DATA REDUCTION STATS
+📊 WHAT THIS HELPS US WITH:
 ═══════════════════════════════════════════════════════════════════
 
-   Original Code: {preview['original_length']} characters
-   After Sanitization: {preview['ast_length']} characters
-   Data Removed: {preview['reduction_percent']}%
+   We learn: "Rule '{rule_id}' triggered a false positive"
+
+   This helps us:
+   • Track which rules have accuracy issues
+   • Prioritize rule improvements
+   • Reduce future false positives
+
+   We do NOT learn anything about YOUR code.
 
 ═══════════════════════════════════════════════════════════════════
 
-✅ Happy with this? Call scanner_report_false_positive to submit.
-⚠️  Want more privacy? Use consent_level=1 for maximum anonymity.
-❌ Don't want to share? That's okay - no data will be sent.
+Ready to submit? Use scanner_report_false_positive with the same parameters.
 """
-
-    except Exception as e:
-        import traceback
-        return {
-            "status": "error",
-            "message": f"Failed to generate preview: {str(e)}",
-            "trace": traceback.format_exc()
-        }
