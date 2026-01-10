@@ -809,7 +809,7 @@
 		{@const stackScanners = hasScanners ? progress.scanners.filter(s => s.category === 'stack-specific') : []}
 		{@const pendingScanners = hasScanners ? progress.scanners.filter(s => s.status === 'pending' || s.status === 'running') : []}
 		{@const slowScannerInfo = {
-			'opengrep': { name: 'OpenGrep', reason: 'Scanning 1000+ security patterns across your entire codebase — this is normal and thorough, not a bug!' },
+			'opengrep': { name: 'OpenGrep', reason: 'Scanning 3,500+ security patterns across your entire codebase — this is thorough, not a bug!' },
 			'slither': { name: 'Slither', reason: 'Comprehensive Solidity static analysis with 90+ detectors' },
 			'slither-upgradeability': { name: 'Slither Upgradeability', reason: 'Storage layout analysis for proxy contracts' },
 			'mythril': { name: 'Mythril', reason: 'Symbolic execution exploring all possible code paths' },
