@@ -785,145 +785,152 @@
 		</div>
 
 	{:else if status === 'queued' || status === 'scanning'}
+		{@const hasScanners = progress.scanners && progress.scanners.length > 0}
+		{@const completedCount = hasScanners ? progress.scanners.filter(s => s.status === 'complete' || s.status === 'error').length : 0}
+		{@const totalCount = hasScanners ? progress.scanners.length : 0}
+		{@const universalScanners = hasScanners ? progress.scanners.filter(s => s.category === 'universal') : []}
+		{@const stackScanners = hasScanners ? progress.scanners.filter(s => s.category === 'stack-specific') : []}
+		{@const pendingScanners = hasScanners ? progress.scanners.filter(s => s.status === 'pending' || s.status === 'running') : []}
+		{@const slowScannerInfo = {
+			'opengrep': { name: 'OpenGrep', reason: 'Deep pattern matching across your entire codebase' },
+			'slither': { name: 'Slither', reason: 'Comprehensive Solidity static analysis' },
+			'slither-upgradeability': { name: 'Slither Upgradeability', reason: 'Storage layout analysis for proxy contracts' },
+			'mythril': { name: 'Mythril', reason: 'Symbolic execution for deep vulnerability detection' },
+			'solhint': { name: 'Solhint', reason: 'Linting all Solidity files individually' }
+		}}
+		{@const remainingSlowScanners = pendingScanners.filter(s => slowScannerInfo[s.name])}
+		{@const onlySlowRemaining = pendingScanners.length > 0 && pendingScanners.every(s => slowScannerInfo[s.name])}
+		{@const isOnSastStep = progress.step === 'sast'}
+
 		<div class="progress-container">
 			<h1>Scanning your repository...</h1>
-	
+
 			<div class="progress-steps">
 				{#each steps as step, i}
-					<div class="step" class:active={i === progress.stepNumber} class:complete={i < progress.stepNumber}>
-						<span class="step-icon">{step.icon}</span>
-						<div class="step-content">
-							<span class="step-label">{step.label}</span>
-							{#if i === progress.stepNumber}
-								<span class="step-detail">{step.details}</span>
+					{@const isSastStep = step.label === 'Scanning code'}
+					{@const showScannerGrid = isSastStep && isOnSastStep && hasScanners}
+
+					<div class="step" class:active={i === progress.stepNumber} class:complete={i < progress.stepNumber} class:expanded={showScannerGrid}>
+						<div class="step-main">
+							<span class="step-icon">{step.icon}</span>
+							<div class="step-content">
+								<span class="step-label">{step.label}</span>
+								{#if i === progress.stepNumber && !showScannerGrid}
+									<span class="step-detail">{step.details}</span>
+								{:else if showScannerGrid}
+									<span class="step-detail">{completedCount}/{totalCount} scanners complete</span>
+								{/if}
+							</div>
+							{#if i < progress.stepNumber}
+								<span class="step-check">✓</span>
+							{:else if i === progress.stepNumber && !showScannerGrid}
+								<span class="step-spinner"></span>
 							{/if}
 						</div>
-						{#if i < progress.stepNumber}
-							<span class="step-check">✓</span>
-						{:else if i === progress.stepNumber}
-							<span class="step-spinner"></span>
+
+						<!-- Scanner Grid - Integrated into SAST step -->
+						{#if showScannerGrid}
+							<div class="scanner-grid-inline">
+								<div class="scanner-grid">
+									<!-- Universal Scanners Column -->
+									<div class="scanner-column">
+										<div class="scanner-column-label">Universal</div>
+										{#each universalScanners as scanner}
+											<div class="scanner-row" class:complete={scanner.status === 'complete'} class:running={scanner.status === 'running'} class:error={scanner.status === 'error'}>
+												<span class="scanner-indicator">
+													{#if scanner.status === 'complete'}
+														<span class="indicator-done">✓</span>
+													{:else if scanner.status === 'running'}
+														<span class="indicator-active"></span>
+													{:else if scanner.status === 'error'}
+														<span class="indicator-error">✗</span>
+													{:else}
+														<span class="indicator-pending">·</span>
+													{/if}
+												</span>
+												<span class="scanner-label">{scanner.name}</span>
+												<span class="scanner-value">
+													{#if scanner.status === 'complete'}
+														{scanner.findings}
+													{:else if scanner.status === 'running'}
+														...
+													{:else if scanner.status === 'error'}
+														err
+													{:else}
+														—
+													{/if}
+												</span>
+											</div>
+										{/each}
+									</div>
+
+									<!-- Stack-Specific Scanners Column -->
+									{#if stackScanners.length > 0}
+										<div class="scanner-column">
+											<div class="scanner-column-label">Stack-Specific</div>
+											{#each stackScanners as scanner}
+												<div class="scanner-row" class:complete={scanner.status === 'complete'} class:running={scanner.status === 'running'} class:error={scanner.status === 'error'}>
+													<span class="scanner-indicator">
+														{#if scanner.status === 'complete'}
+															<span class="indicator-done">✓</span>
+														{:else if scanner.status === 'running'}
+															<span class="indicator-active"></span>
+														{:else if scanner.status === 'error'}
+															<span class="indicator-error">✗</span>
+														{:else}
+															<span class="indicator-pending">·</span>
+														{/if}
+													</span>
+													<span class="scanner-label">{scanner.name}</span>
+													<span class="scanner-value">
+														{#if scanner.status === 'complete'}
+															{scanner.findings}
+														{:else if scanner.status === 'running'}
+															...
+														{:else if scanner.status === 'error'}
+															err
+														{:else}
+															—
+														{/if}
+													</span>
+												</div>
+											{/each}
+										</div>
+									{/if}
+								</div>
+
+								<!-- Slow scanner notice -->
+								{#if onlySlowRemaining && remainingSlowScanners.length > 0}
+									<div class="scanner-notice">
+										<span class="notice-indicator">⏱</span>
+										<span class="notice-message">
+											{#if remainingSlowScanners.length === 1}
+												{slowScannerInfo[remainingSlowScanners[0].name]?.name || remainingSlowScanners[0].name}: {slowScannerInfo[remainingSlowScanners[0].name]?.reason || 'Deep analysis in progress'}
+											{:else}
+												Deep analysis: {remainingSlowScanners.map(s => slowScannerInfo[s.name]?.name || s.name).join(', ')}
+											{/if}
+										</span>
+									</div>
+								{/if}
+							</div>
 						{/if}
 					</div>
 				{/each}
 			</div>
 
-			<div class="security-fact">
-				<span class="fact-text">{securityFacts[currentFactIndex].fact}</span>
-				<span class="fact-source">Source: {securityFacts[currentFactIndex].source}</span>
-			</div>
+			<!-- Security fact - only show when not on SAST step -->
+			{#if !isOnSastStep || !hasScanners}
+				<div class="security-fact">
+					<span class="fact-text">{securityFacts[currentFactIndex].fact}</span>
+					<span class="fact-source">Source: {securityFacts[currentFactIndex].source}</span>
+				</div>
+			{/if}
 
 			<div class="progress-bar">
 				<div class="progress-fill" style="width: {progress.percent}%"></div>
 			</div>
 
 			<p class="progress-message">{progress.message}</p>
-
-			<!-- Scanner Progress Detail -->
-			{#if progress.scanners && progress.scanners.length > 0}
-				{@const completedCount = progress.scanners.filter(s => s.status === 'complete' || s.status === 'error').length}
-				{@const totalCount = progress.scanners.length}
-				{@const universalScanners = progress.scanners.filter(s => s.category === 'universal')}
-				{@const stackScanners = progress.scanners.filter(s => s.category === 'stack-specific')}
-				{@const pendingScanners = progress.scanners.filter(s => s.status === 'pending' || s.status === 'running')}
-				{@const slowScannerInfo = {
-					'opengrep': { name: 'OpenGrep', reason: 'Deep pattern matching across your entire codebase' },
-					'slither': { name: 'Slither', reason: 'Comprehensive Solidity static analysis' },
-					'slither-upgradeability': { name: 'Slither Upgradeability', reason: 'Storage layout analysis for proxy contracts' },
-					'mythril': { name: 'Mythril', reason: 'Symbolic execution for deep vulnerability detection' },
-					'solhint': { name: 'Solhint', reason: 'Linting all Solidity files individually' }
-				}}
-				{@const remainingSlowScanners = pendingScanners.filter(s => slowScannerInfo[s.name])}
-				{@const onlySlowRemaining = pendingScanners.length > 0 && pendingScanners.every(s => slowScannerInfo[s.name])}
-
-				<div class="scanner-grid-container">
-					<div class="scanner-grid-header">
-						<span class="scanner-grid-title">SECURITY SCANNERS</span>
-						<span class="scanner-grid-count">{completedCount}/{totalCount}</span>
-					</div>
-
-					<div class="scanner-grid">
-						<!-- Universal Scanners Column -->
-						<div class="scanner-column">
-							<div class="scanner-column-label">Universal</div>
-							{#each universalScanners as scanner}
-								<div class="scanner-row" class:complete={scanner.status === 'complete'} class:running={scanner.status === 'running'} class:error={scanner.status === 'error'}>
-									<span class="scanner-indicator">
-										{#if scanner.status === 'complete'}
-											<span class="indicator-done">✓</span>
-										{:else if scanner.status === 'running'}
-											<span class="indicator-active"></span>
-										{:else if scanner.status === 'error'}
-											<span class="indicator-error">✗</span>
-										{:else}
-											<span class="indicator-pending">·</span>
-										{/if}
-									</span>
-									<span class="scanner-label">{scanner.name}</span>
-									<span class="scanner-value">
-										{#if scanner.status === 'complete'}
-											{scanner.findings}
-										{:else if scanner.status === 'running'}
-											...
-										{:else if scanner.status === 'error'}
-											err
-										{:else}
-											—
-										{/if}
-									</span>
-								</div>
-							{/each}
-						</div>
-
-						<!-- Stack-Specific Scanners Column -->
-						{#if stackScanners.length > 0}
-							<div class="scanner-column">
-								<div class="scanner-column-label">Stack-Specific</div>
-								{#each stackScanners as scanner}
-									<div class="scanner-row" class:complete={scanner.status === 'complete'} class:running={scanner.status === 'running'} class:error={scanner.status === 'error'}>
-										<span class="scanner-indicator">
-											{#if scanner.status === 'complete'}
-												<span class="indicator-done">✓</span>
-											{:else if scanner.status === 'running'}
-												<span class="indicator-active"></span>
-											{:else if scanner.status === 'error'}
-												<span class="indicator-error">✗</span>
-											{:else}
-												<span class="indicator-pending">·</span>
-											{/if}
-										</span>
-										<span class="scanner-label">{scanner.name}</span>
-										<span class="scanner-value">
-											{#if scanner.status === 'complete'}
-												{scanner.findings}
-											{:else if scanner.status === 'running'}
-												...
-											{:else if scanner.status === 'error'}
-												err
-											{:else}
-												—
-											{/if}
-										</span>
-									</div>
-								{/each}
-							</div>
-						{/if}
-					</div>
-
-					<!-- Slow scanner notice - integrated into grid -->
-					{#if onlySlowRemaining && remainingSlowScanners.length > 0}
-						<div class="scanner-notice">
-							<span class="notice-indicator">⏱</span>
-							<span class="notice-message">
-								{#if remainingSlowScanners.length === 1}
-									{slowScannerInfo[remainingSlowScanners[0].name]?.name || remainingSlowScanners[0].name}: {slowScannerInfo[remainingSlowScanners[0].name]?.reason || 'Deep analysis in progress'}
-								{:else}
-									Deep analysis: {remainingSlowScanners.map(s => slowScannerInfo[s.name]?.name || s.name).join(', ')}
-								{/if}
-							</span>
-						</div>
-					{/if}
-				</div>
-			{/if}
 
 			<button class="btn btn-cancel" onclick={cancelScan}>
 				Cancel Scan
@@ -1258,13 +1265,18 @@
 
 	.step {
 		display: flex;
-		align-items: center;
-		gap: 1rem;
-		padding: 1rem;
+		flex-direction: column;
 		border: 1px solid var(--border);
 		background: var(--bg-primary);
 		opacity: 0.5;
 		transition: all 0.3s;
+	}
+
+	.step-main {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 1rem;
 	}
 
 	.step.active {
@@ -1275,6 +1287,16 @@
 
 	.step.complete {
 		opacity: 1;
+	}
+
+	.step.expanded {
+		opacity: 1;
+		border-color: var(--green-dim);
+	}
+
+	.step.expanded .step-main {
+		border-bottom: 1px solid var(--border);
+		background: var(--bg-secondary);
 	}
 
 	.step-icon {
@@ -1311,10 +1333,6 @@
 		animation: spin 1s linear infinite;
 	}
 
-	@keyframes spin {
-		to { transform: rotate(360deg); }
-	}
-
 	.progress-bar {
 		max-width: 400px;
 		margin: 0 auto 1rem;
@@ -1333,36 +1351,9 @@
 		color: var(--text-secondary);
 	}
 
-	/* Scanner Grid - Vibeship Style */
-	.scanner-grid-container {
-		max-width: 600px;
-		margin: 2rem auto;
-		border: 1px solid var(--border);
+	/* Scanner Grid - Inline in Step */
+	.scanner-grid-inline {
 		background: var(--bg-primary);
-	}
-
-	.scanner-grid-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--border);
-		background: var(--bg-secondary);
-	}
-
-	.scanner-grid-title {
-		font-family: 'JetBrains Mono', monospace;
-		font-size: 0.7rem;
-		font-weight: 600;
-		letter-spacing: 0.1em;
-		color: var(--text-tertiary);
-	}
-
-	.scanner-grid-count {
-		font-family: 'JetBrains Mono', monospace;
-		font-size: 0.85rem;
-		font-weight: 600;
-		color: var(--green-dim);
 	}
 
 	.scanner-grid {
