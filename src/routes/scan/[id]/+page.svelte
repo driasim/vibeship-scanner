@@ -294,7 +294,7 @@
 		{ id: 'init', label: 'Initializing', icon: '⚡', details: 'Setting up secure scan environment' },
 		{ id: 'clone', label: 'Cloning repository', icon: '📥', details: 'Fetching source code from GitHub' },
 		{ id: 'detect', label: 'Detecting stack', icon: '🔍', details: 'Identifying languages and frameworks' },
-		{ id: 'sast', label: 'Scanning code', icon: '🛡️', details: 'Running 2000+ security patterns' },
+		{ id: 'sast', label: 'Scanning code', icon: '🛡️', details: 'Running 3,500+ patterns across 16 scanners' },
 		{ id: 'deps', label: 'Checking dependencies', icon: '📦', details: 'Analyzing package vulnerabilities' },
 		{ id: 'secrets', label: 'Scanning for secrets', icon: '🔐', details: 'Detecting exposed credentials' },
 		{ id: 'score', label: 'Calculating score', icon: '📊', details: 'Generating security report' }

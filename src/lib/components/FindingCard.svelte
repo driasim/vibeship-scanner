@@ -682,7 +682,6 @@
 		color: var(--text-secondary);
 		background: transparent;
 		border: 1px solid var(--border);
-		border-radius: 6px;
 		cursor: pointer;
 		transition: all 0.2s ease;
 	}
@@ -695,7 +694,6 @@
 
 	.fp-report-form {
 		background: var(--bg-tertiary);
-		border-radius: 8px;
 		padding: 1rem;
 	}
 
@@ -733,7 +731,6 @@
 		padding: 0.75rem;
 		background: rgba(34, 197, 94, 0.1);
 		border: 1px solid rgba(34, 197, 94, 0.3);
-		border-radius: 6px;
 		color: #22c55e;
 		font-size: 0.85rem;
 	}
@@ -745,7 +742,6 @@
 		padding: 0.75rem;
 		background: rgba(239, 68, 68, 0.1);
 		border: 1px solid rgba(239, 68, 68, 0.3);
-		border-radius: 6px;
 		color: #ef4444;
 		font-size: 0.85rem;
 	}
@@ -770,7 +766,6 @@
 		padding: 0.5rem 0.75rem;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border);
-		border-radius: 6px;
 		cursor: pointer;
 		transition: all 0.15s ease;
 	}
@@ -821,7 +816,6 @@
 		color: white;
 		background: var(--accent);
 		border: none;
-		border-radius: 6px;
 		cursor: pointer;
 		transition: all 0.2s ease;
 	}
@@ -841,7 +835,6 @@
 		color: var(--text-secondary);
 		background: transparent;
 		border: 1px solid var(--border);
-		border-radius: 6px;
 		cursor: pointer;
 		transition: all 0.15s ease;
 	}

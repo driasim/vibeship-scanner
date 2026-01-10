@@ -556,7 +556,7 @@
 					</svg>
 				</div>
 				<h3>Code Security</h3>
-				<p>SQL injection, XSS, insecure auth patterns, and 2000+ vulnerability checks using Semgrep.</p>
+				<p>SQL injection, XSS, insecure auth patterns, and 3,500+ security patterns across 16 parallel scanners.</p>
 			</div>
 			<div class="feature-card">
 				<div class="feature-icon">
