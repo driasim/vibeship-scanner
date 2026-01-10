@@ -285,7 +285,15 @@
 											name="fp-reason"
 											value={reason.value}
 											bind:group={fpReason}
+											class="fp-radio-input"
 										/>
+										<span class="fp-radio-indicator">
+											{#if fpReason === reason.value}
+												<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+													<polyline points="20 6 9 17 4 12" />
+												</svg>
+											{/if}
+										</span>
 										<div class="fp-reason-content">
 											<span class="fp-reason-label">{reason.label}</span>
 											<span class="fp-reason-desc">{reason.desc}</span>
@@ -306,7 +314,14 @@
 										Submit Report
 									{/if}
 								</button>
-								<span class="fp-privacy-note">Anonymous • No code shared</span>
+							</div>
+
+							<div class="fp-privacy-note">
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+									<path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+								</svg>
+								<span>Your privacy is protected. We only collect the rule ID and your selected reason — no code, file paths, or identifying information is ever sent.</span>
 							</div>
 						{/if}
 					</div>
@@ -762,8 +777,8 @@
 	.fp-reason-option {
 		display: flex;
 		align-items: flex-start;
-		gap: 0.5rem;
-		padding: 0.5rem 0.75rem;
+		gap: 0.75rem;
+		padding: 0.75rem 1rem;
 		background: var(--bg-secondary);
 		border: 1px solid var(--border);
 		cursor: pointer;
@@ -772,16 +787,43 @@
 
 	.fp-reason-option:hover {
 		border-color: var(--text-tertiary);
+		background: var(--bg-tertiary);
 	}
 
-	.fp-reason-option:has(input:checked) {
+	.fp-reason-option.selected {
 		border-color: var(--accent);
-		background: rgba(59, 130, 246, 0.05);
+		background: rgba(59, 130, 246, 0.08);
 	}
 
-	.fp-reason-option input[type="radio"] {
+	/* Hide native radio input */
+	.fp-radio-input {
+		position: absolute;
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	/* Custom radio indicator - square Vibeship style */
+	.fp-radio-indicator {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 20px;
+		height: 20px;
+		min-width: 20px;
+		border: 2px solid var(--border);
+		background: var(--bg-primary);
 		margin-top: 0.125rem;
-		accent-color: var(--accent);
+		transition: all 0.15s ease;
+	}
+
+	.fp-reason-option:hover .fp-radio-indicator {
+		border-color: var(--text-tertiary);
+	}
+
+	.fp-reason-option.selected .fp-radio-indicator {
+		border-color: var(--accent);
+		background: var(--accent);
+		color: white;
 	}
 
 	.fp-reason-content {
@@ -799,25 +841,27 @@
 		display: block;
 		font-size: 0.75rem;
 		color: var(--text-tertiary);
-		margin-top: 0.125rem;
+		margin-top: 0.25rem;
 	}
 
 	.fp-actions {
 		display: flex;
-		gap: 0.5rem;
-		margin-bottom: 0.75rem;
+		justify-content: center;
+		margin-bottom: 1rem;
 	}
 
 	.fp-submit-btn {
-		flex: 1;
-		padding: 0.625rem 1rem;
-		font-size: 0.85rem;
-		font-weight: 500;
+		width: 100%;
+		padding: 0.75rem 1.5rem;
+		font-size: 0.9rem;
+		font-weight: 600;
 		color: white;
 		background: var(--accent);
 		border: none;
 		cursor: pointer;
 		transition: all 0.2s ease;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
 	}
 
 	.fp-submit-btn:hover:not(:disabled) {
@@ -825,27 +869,25 @@
 	}
 
 	.fp-submit-btn:disabled {
-		opacity: 0.5;
+		opacity: 0.4;
 		cursor: not-allowed;
 	}
 
-	.fp-cancel-btn {
-		padding: 0.625rem 1rem;
-		font-size: 0.85rem;
-		color: var(--text-secondary);
-		background: transparent;
-		border: 1px solid var(--border);
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-
-	.fp-cancel-btn:hover {
-		border-color: var(--text-tertiary);
-		color: var(--text-primary);
-	}
-
 	.fp-privacy-note {
-		font-size: 0.7rem;
+		display: flex;
+		align-items: flex-start;
+		gap: 0.5rem;
+		padding: 0.75rem;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+		font-size: 0.75rem;
+		color: var(--text-tertiary);
+		line-height: 1.4;
+	}
+
+	.fp-privacy-note svg {
+		flex-shrink: 0;
+		margin-top: 0.125rem;
 		color: var(--text-tertiary);
 	}
 
