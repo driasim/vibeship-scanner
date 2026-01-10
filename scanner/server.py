@@ -624,8 +624,8 @@ def report_false_positive():
 
         data = request.json or {}
 
-        # Validate required fields
-        required = ['rule_id', 'language', 'code_snippet', 'reason_category', 'consent_level']
+        # Validate required fields (code_snippet now optional for ultra-privacy)
+        required = ['rule_id', 'language', 'reason_category', 'consent_level']
         for field in required:
             if field not in data:
                 return jsonify({'error': f'Missing required field: {field}'}), 400
@@ -640,37 +640,54 @@ def report_false_positive():
         if data.get('reason_category') not in valid_reasons:
             return jsonify({'error': f'reason_category must be one of: {valid_reasons}'}), 400
 
-        # Sanitize the report
-        sanitized = sanitize_for_feedback(
-            code_snippet=data.get('code_snippet', ''),
-            context=data.get('context'),
-            repo_url=data.get('repo_url'),
-            language=data.get('language'),
-            consent_level=consent_level,
-            rule_id=data.get('rule_id'),
-            rule_message=data.get('rule_message', ''),
-            severity=data.get('severity', 'WARNING'),
-            reason_category=data.get('reason_category'),
-            reason_detail=data.get('reason_detail', ''),
-            ai_analysis=data.get('ai_analysis', '')
-        )
-
         # Submit to Supabase using the false_positive_feedback table
         supabase = get_supabase()
 
-        # Insert using the new ultra-privacy schema (004_false_positive_feedback.sql)
-        result = supabase.table('false_positive_feedback').insert({
-            'rule_id': sanitized['rule_id'],
-            'rule_message': sanitized['rule_message'],
-            'severity': sanitized['severity'],
-            'language': sanitized['language'],
-            'ast_structure': sanitized['ast_structure'],
-            'pattern_hash': sanitized['pattern_hash'],
-            'structural_hints': sanitized['structural_hints'],
-            'framework_hints': sanitized['framework_hints'],
-            'reason_category': sanitized['reason_category'],
-            'consent_level': sanitized['consent_level']
-        }).execute()
+        # Check if this is an ultra-privacy report (no code_snippet)
+        if not data.get('code_snippet'):
+            # ULTRA PRIVACY: No code sent, just metadata
+            # Insert directly without sanitization (nothing to sanitize)
+            result = supabase.table('false_positive_feedback').insert({
+                'rule_id': data.get('rule_id'),
+                'rule_message': data.get('rule_message', ''),
+                'severity': data.get('severity', 'WARNING'),
+                'language': data.get('language'),
+                'ast_structure': None,  # No code = no AST
+                'pattern_hash': None,   # No code = no pattern hash
+                'structural_hints': [],
+                'framework_hints': [],
+                'reason_category': data.get('reason_category'),
+                'consent_level': consent_level
+            }).execute()
+        else:
+            # Legacy path: Sanitize the report (when code is provided)
+            sanitized = sanitize_for_feedback(
+                code_snippet=data.get('code_snippet', ''),
+                context=data.get('context'),
+                repo_url=data.get('repo_url'),
+                language=data.get('language'),
+                consent_level=consent_level,
+                rule_id=data.get('rule_id'),
+                rule_message=data.get('rule_message', ''),
+                severity=data.get('severity', 'WARNING'),
+                reason_category=data.get('reason_category'),
+                reason_detail=data.get('reason_detail', ''),
+                ai_analysis=data.get('ai_analysis', '')
+            )
+
+            # Insert using the new ultra-privacy schema (004_false_positive_feedback.sql)
+            result = supabase.table('false_positive_feedback').insert({
+                'rule_id': sanitized['rule_id'],
+                'rule_message': sanitized['rule_message'],
+                'severity': sanitized['severity'],
+                'language': sanitized['language'],
+                'ast_structure': sanitized['ast_structure'],
+                'pattern_hash': sanitized['pattern_hash'],
+                'structural_hints': sanitized['structural_hints'],
+                'framework_hints': sanitized['framework_hints'],
+                'reason_category': sanitized['reason_category'],
+                'consent_level': sanitized['consent_level']
+            }).execute()
 
         report_id = result.data[0]['id'] if result.data else 'submitted'
 
