@@ -6,6 +6,60 @@ A security scanning tool designed for vibe coders. Analyzes GitHub repositories 
 
 **[scanner.vibeship.co](https://scanner.vibeship.co)** — Paste any public GitHub repo URL and get a full security scan in minutes. No signup required.
 
+---
+
+## MCP Integration (Claude, Cursor, AI Assistants)
+
+Use Vibeship Scanner directly from Claude or any MCP-compatible AI assistant.
+
+### Quick Setup
+
+Add to your Claude Desktop config:
+
+```json
+{
+  "mcpServers": {
+    "vibeship-scanner": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://scanner.vibeship.co/mcp"]
+    }
+  }
+}
+```
+
+### What You Can Do
+
+| Command | What happens |
+|---------|-------------|
+| "Scan https://github.com/org/repo" | Runs 16 security scanners on the repo |
+| "Fix these security issues" | Creates a task list and fixes all issues systematically |
+| "This is a false positive" | Reports FP with ultra-privacy (no code sent) |
+| "What is CVE-2021-44228?" | Looks up vulnerability details |
+
+### Example Session
+
+```
+You: Scan my repo https://github.com/myorg/myapp
+
+Claude: 🎯 SCAN COMPLETE
+        📊 Score: 45/100 (Grade F)
+        🔴 Critical: 5  |  🟠 High: 18
+
+        Ready to fix? Say "Yes, fix these issues"
+
+You: Yes, fix these issues
+
+Claude: [Creates TodoWrite task list with all 23 issues]
+        Working through fixes one by one...
+        ✅ Fix #1 complete - SQL injection in api/users.js
+        ✅ Fix #2 complete - Hardcoded secret in config.ts
+        ...
+```
+
+**Full documentation**: [MCP_USAGE.md](MCP_USAGE.md)
+
+---
+
 ## How AI Fix Prompts Work
 
 Vibe coding with AI assistants is great for building fast, but security vulnerabilities can slip through. Vibeship Scanner bridges that gap:
