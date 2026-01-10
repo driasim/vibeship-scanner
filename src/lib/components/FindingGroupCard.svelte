@@ -3,7 +3,7 @@
 	import { getUrgencyColor, getUrgencyBgColor } from '$lib/vibeTransformer';
 	import FindingCard from './FindingCard.svelte';
 
-	let { group }: { group: FindingGroup } = $props();
+	let { group, scanId }: { group: FindingGroup; scanId: string } = $props();
 	let expanded = $state(false);
 
 	const severityColors: Record<VibeUrgency, string> = {
@@ -47,7 +47,7 @@
 	{#if expanded}
 		<div class="group-findings">
 			{#each group.findings as finding, i}
-				<FindingCard {finding} index={i} />
+				<FindingCard {finding} index={i} {scanId} />
 			{/each}
 		</div>
 	{/if}

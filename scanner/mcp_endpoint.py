@@ -883,14 +883,17 @@ def execute_master_prompt(args):
         if sev in severity_counts:
             severity_counts[sev] += 1
 
-    # Build summary list
+    # Build summary list AND checklist
     summary_lines = []
+    checklist_by_severity = {'critical': [], 'high': [], 'medium': [], 'low': [], 'info': []}
+
     for i, f in enumerate(deduplicated):
         loc = f.get('location', {})
         file_path = loc.get('file', 'unknown')
         line = loc.get('line', '')
         location_str = f"{file_path}{f':{line}' if line else ''}"
         sev = f.get('severity', 'INFO').upper()
+        sev_lower = sev.lower()
         title = f.get('title', 'Unknown issue')
 
         # Check for duplicates
@@ -899,6 +902,20 @@ def execute_master_prompt(args):
         count_suffix = f" ({len(dups)} occurrences)" if len(dups) > 1 else ""
 
         summary_lines.append(f"{i+1}. [{sev}] {title} → `{location_str}`{count_suffix}")
+
+        # Build checklist item
+        checklist_item = f"- [ ] **#{i+1}** [{sev}] {title} → `{location_str}`{count_suffix}"
+        if sev_lower in checklist_by_severity:
+            checklist_by_severity[sev_lower].append(checklist_item)
+
+    # Build checklist sections
+    checklist_sections = []
+    severity_emojis = {'critical': '🔴', 'high': '🟠', 'medium': '🟡', 'low': '⚪', 'info': 'ℹ️'}
+    for sev in ['critical', 'high', 'medium', 'low', 'info']:
+        items = checklist_by_severity[sev]
+        if items:
+            emoji = severity_emojis[sev]
+            checklist_sections.append(f"### {emoji} {sev.upper()} ({len(items)} items)\n" + "\n".join(items))
 
     # Build detailed fix guides
     fix_guides = []
@@ -961,6 +978,9 @@ def execute_master_prompt(args):
 
     unique_count = len(deduplicated)
 
+    # Build checklist markdown
+    checklist_md = "\n\n".join(checklist_sections) if checklist_sections else "No items to fix!"
+
     # Final prompt
     return f"""# Security Fix Guide
 
@@ -985,7 +1005,26 @@ After consolidating duplicate findings (same vulnerability in same file) and exc
 
 ---
 
-## Quick Summary ({unique_count} unique issues)
+## 📋 FIX CHECKLIST (0/{unique_count} completed)
+
+**IMPORTANT: Work through this checklist ONE ITEM AT A TIME.**
+Mark each item as complete `[x]` after fixing. Do NOT move to the next item until the current one is done.
+
+{checklist_md}
+
+---
+
+## Progress Tracking
+
+After each fix:
+1. Mark the checkbox `[x]` for the completed item
+2. Update the progress counter: `(1/{unique_count} completed)` → `(2/{unique_count} completed)` etc.
+3. Announce: "✅ Fixed #N - [brief description]. Progress: X/{unique_count}"
+4. Then proceed to the next unchecked item
+
+---
+
+## Quick Reference ({unique_count} unique issues)
 
 {chr(10).join(summary_lines)}
 
@@ -999,19 +1038,23 @@ After consolidating duplicate findings (same vulnerability in same file) and exc
 
 ## How to Work Through This
 
-1. **Go section by section** - Start with the first vulnerability type (most critical)
-2. **Read the file** - Open each listed file and find the vulnerable code at the specified line
-3. **Apply the fix pattern** - Use the code examples provided as templates
-4. **Search for similar issues** - After fixing, grep the codebase for similar vulnerable patterns
-5. **Verify the fix** - Make sure the code still works after your changes
-6. **Move to the next** - Continue until all issues are resolved
+1. **Pick the first unchecked item** from the checklist above
+2. **Read the file** - Open the file and find the vulnerable code at the specified line
+3. **Apply the fix pattern** - Use the code examples from the Detailed Fix section
+4. **Mark it complete** - Update the checkbox to `[x]` and announce progress
+5. **Move to the next** - Pick the next unchecked item
+6. **Repeat until all items show `[x]`**
+
+**CRITICAL:** Do not batch fixes or skip items. Fix ONE vulnerability, mark it complete, then move to the next.
 
 ## After All Fixes
 
-- Run the application and test that everything works
-- Run any existing tests: `npm test` or equivalent
-- List all files you modified
-- Summarize what you changed
+When all {unique_count} items are checked:
+1. Announce: "🎉 All {unique_count}/{unique_count} security fixes completed!"
+2. Run the application and test that everything works
+3. Run any existing tests: `npm test` or equivalent
+4. List all files you modified
+5. Summarize what you changed
 
 ---
 
@@ -1785,8 +1828,6 @@ app.use(session({
 
 def execute_report_false_positive(args):
     """Report a false positive finding to help improve the scanner"""
-    from feedback.sanitizer import sanitize_for_feedback
-
     scan_id = args.get('scan_id')
     finding_index = args.get('finding_index', 0)
     reason_category = args.get('reason_category')
@@ -1835,7 +1876,14 @@ def execute_report_false_positive(args):
     line = location.get('line', 0)
 
     # Get the code snippet (we'll need to construct it from finding data)
-    code_snippet = finding.get('code', finding.get('snippet', ''))
+    # snippet can be a dict with 'code' key or a string
+    snippet = finding.get('snippet', {})
+    if isinstance(snippet, dict):
+        code_snippet = snippet.get('code', '')
+    else:
+        code_snippet = snippet or ''
+    if not code_snippet:
+        code_snippet = finding.get('code', '')
     if not code_snippet:
         # Try to construct from message or title
         code_snippet = f"// Line {line} in {file_path}\n// {finding.get('title', 'Unknown finding')}"
@@ -1858,28 +1906,27 @@ def execute_report_false_positive(args):
             context += finding.get('context')
 
     try:
-        # Sanitize the data for privacy
-        sanitized = sanitize_for_feedback(
-            code_snippet=code_snippet,
-            context=context,
-            repo_url=repo_url if consent_level == 3 else None,
-            language=language,
-            consent_level=consent_level,
-            rule_id=rule_id,
-            rule_message=rule_message,
-            severity=severity,
-            reason_category=reason_category,
-            reason_detail=reason_detail,
-            ai_analysis=ai_analysis
-        )
-
-        # Submit to feedback API
+        # Send raw data to feedback endpoint - server does its own sanitization
         import requests
         feedback_url = "https://scanner-empty-field-5676.fly.dev/feedback/report"
 
+        payload = {
+            'rule_id': rule_id,
+            'rule_message': rule_message,
+            'severity': severity,
+            'language': language,
+            'code_snippet': code_snippet,
+            'context': context,
+            'repo_url': repo_url if consent_level == 3 else None,
+            'reason_category': reason_category,
+            'reason_detail': reason_detail,
+            'ai_analysis': ai_analysis,
+            'consent_level': consent_level
+        }
+
         response = requests.post(
             feedback_url,
-            json=sanitized,
+            json=payload,
             timeout=10,
             headers={'Content-Type': 'application/json'}
         )
@@ -2013,7 +2060,14 @@ def execute_preview_false_positive(args):
     line = location.get('line', 0)
 
     # Get code snippet from finding
-    code_snippet = finding.get('code', finding.get('snippet', ''))
+    # snippet can be a dict with 'code' key or a string
+    snippet = finding.get('snippet', {})
+    if isinstance(snippet, dict):
+        code_snippet = snippet.get('code', '')
+    else:
+        code_snippet = snippet or ''
+    if not code_snippet:
+        code_snippet = finding.get('code', '')
     if not code_snippet:
         code_snippet = f"// Line {line} in {file_path}\n// {finding.get('title', 'Unknown finding')}"
 
@@ -2075,12 +2129,11 @@ def execute_preview_false_positive(args):
    Language: {preview['will_send']['language']}
    Reason: {preview['will_send']['reason_category']}
 
-   Sanitized Pattern:
-   {preview['will_send']['sanitized_pattern']}
+   AST Structure (NO CODE):
+   {preview['will_send']['ast_structure']}
 
-   Pattern Structure: {preview['will_send']['pattern_structure']}
+   Structural Hints: {', '.join(preview['will_send']['structural_hints']) if preview['will_send']['structural_hints'] else 'None detected'}
    Framework Hints: {', '.join(preview['will_send']['framework_hints']) if preview['will_send']['framework_hints'] else 'None detected'}
-   Context Included: {preview['will_send']['context_included']}
 
 ═══════════════════════════════════════════════════════════════════
 ❌ WHAT WILL NOT BE SENT (removed for your privacy):
@@ -2093,7 +2146,7 @@ def execute_preview_false_positive(args):
 ═══════════════════════════════════════════════════════════════════
 
    Original Code: {preview['original_length']} characters
-   After Sanitization: {preview['sanitized_length']} characters
+   After Sanitization: {preview['ast_length']} characters
    Data Removed: {preview['reduction_percent']}%
 
 ═══════════════════════════════════════════════════════════════════

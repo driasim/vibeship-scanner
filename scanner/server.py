@@ -621,39 +621,35 @@ def report_false_positive():
             ai_analysis=data.get('ai_analysis', '')
         )
 
-        # Submit to Supabase
+        # Submit to Supabase using the false_positive_feedback table
         supabase = get_supabase()
 
-        # Use the upsert function for deduplication
-        result = supabase.rpc('feedback.upsert_false_positive', {
-            'p_rule_id': sanitized['rule_id'],
-            'p_rule_message': sanitized['rule_message'],
-            'p_severity': sanitized['severity'],
-            'p_language': sanitized['language'],
-            'p_sanitized_pattern': sanitized['sanitized_pattern'],
-            'p_pattern_hash': sanitized['pattern_hash'],
-            'p_pattern_structure': sanitized['pattern_structure'],
-            'p_surrounding_context': sanitized['surrounding_context'],
-            'p_framework_hints': sanitized['framework_hints'],
-            'p_reason_category': sanitized['reason_category'],
-            'p_reason_detail': sanitized['reason_detail'],
-            'p_ai_analysis': sanitized['ai_analysis'],
-            'p_consent_level': sanitized['consent_level'],
-            'p_anonymized_repo_hash': sanitized['anonymized_repo_hash']
+        # Insert using the new ultra-privacy schema (004_false_positive_feedback.sql)
+        result = supabase.table('false_positive_feedback').insert({
+            'rule_id': sanitized['rule_id'],
+            'rule_message': sanitized['rule_message'],
+            'severity': sanitized['severity'],
+            'language': sanitized['language'],
+            'ast_structure': sanitized['ast_structure'],
+            'pattern_hash': sanitized['pattern_hash'],
+            'structural_hints': sanitized['structural_hints'],
+            'framework_hints': sanitized['framework_hints'],
+            'reason_category': sanitized['reason_category'],
+            'consent_level': sanitized['consent_level']
         }).execute()
 
-        report_id = result.data if result.data else 'submitted'
+        report_id = result.data[0]['id'] if result.data else 'submitted'
 
-        # Check if this is a known issue
-        known_check = supabase.table('feedback.false_positive_reports').select('status, report_count').eq(
-            'pattern_hash', sanitized['pattern_hash']
-        ).eq('rule_id', sanitized['rule_id']).limit(1).execute()
-
+        # Check if this pattern was already reported (using aggregated stats)
         known_issue = False
-        if known_check.data and len(known_check.data) > 0:
-            status = known_check.data[0].get('status')
-            if status in ['confirmed', 'fixed', 'reviewing']:
-                known_issue = True
+        try:
+            stats_check = supabase.table('rule_statistics').select('total_count').eq(
+                'rule_id', sanitized['rule_id']
+            ).limit(1).execute()
+            if stats_check.data and stats_check.data[0].get('total_count', 0) > 5:
+                known_issue = True  # Pattern seen multiple times
+        except Exception:
+            pass  # Ignore stats errors
 
         print(f"[Feedback] Received report for rule {sanitized['rule_id']}, pattern_hash={sanitized['pattern_hash'][:8]}...", flush=True)
 
@@ -785,36 +781,31 @@ def check_known_false_positives(rule_id):
 
     GET /feedback/check-known/sol-unchecked-call-return
 
-    Returns known patterns and their status (so users don't report duplicates).
+    Returns aggregated stats about false positives for this rule.
     """
     try:
         supabase = get_supabase()
 
-        # Get confirmed/reviewing false positives for this rule
-        result = supabase.table('feedback.false_positive_reports').select(
-            'pattern_structure, reason_category, status, report_count, framework_hints'
-        ).eq('rule_id', rule_id).in_('status', ['confirmed', 'reviewing', 'fixed']).execute()
+        # Get aggregated stats for this rule from rule_statistics table
+        stats = supabase.table('rule_statistics').select(
+            'reason_category, total_count, last_updated_at'
+        ).eq('rule_id', rule_id).execute()
 
         patterns = []
-        for row in (result.data or []):
+        total = 0
+        for row in (stats.data or []):
+            count = row.get('total_count', 0)
+            total += count
             patterns.append({
-                'pattern': row.get('pattern_structure'),
                 'reason': row.get('reason_category'),
-                'status': row.get('status'),
-                'reports': row.get('report_count', 1),
-                'frameworks': row.get('framework_hints', [])
+                'count': count
             })
-
-        # Get summary stats
-        total_reports = supabase.table('feedback.false_positive_reports').select(
-            'id', count='exact'
-        ).eq('rule_id', rule_id).execute()
 
         return jsonify({
             'rule_id': rule_id,
             'known_patterns': patterns,
-            'total_reports': total_reports.count or 0,
-            'has_known_issues': len(patterns) > 0
+            'total_reports': total,
+            'has_known_issues': total > 0
         })
 
     except Exception as e:
@@ -835,34 +826,37 @@ def feedback_stats():
     GET /feedback/stats
 
     Returns aggregate statistics about false positive reports.
+    Uses the new ultra-privacy schema tables.
     """
     try:
         supabase = get_supabase()
 
-        # Total reports
-        total = supabase.table('feedback.false_positive_reports').select(
-            'id', count='exact'
+        # Get aggregated stats from rule_statistics table
+        stats = supabase.table('rule_statistics').select(
+            'rule_id, reason_category, total_count'
         ).execute()
 
-        # Reports by status
-        confirmed = supabase.table('feedback.false_positive_reports').select(
-            'id', count='exact'
-        ).eq('status', 'confirmed').execute()
+        total = 0
+        by_reason = {}
+        top_rules = {}
 
-        fixed = supabase.table('feedback.false_positive_reports').select(
-            'id', count='exact'
-        ).eq('status', 'fixed').execute()
+        for row in (stats.data or []):
+            count = row.get('total_count', 0)
+            total += count
 
-        # Top rules with reports
-        top_rules = supabase.table('feedback.rule_summary').select(
-            'rule_id, total_reports, confirmed_fps'
-        ).order('total_reports', desc=True).limit(10).execute()
+            reason = row.get('reason_category', 'other')
+            by_reason[reason] = by_reason.get(reason, 0) + count
+
+            rule = row.get('rule_id')
+            top_rules[rule] = top_rules.get(rule, 0) + count
+
+        # Sort top rules
+        sorted_rules = sorted(top_rules.items(), key=lambda x: x[1], reverse=True)[:10]
 
         return jsonify({
-            'total_reports': total.count or 0,
-            'confirmed_false_positives': confirmed.count or 0,
-            'rules_improved': fixed.count or 0,
-            'top_reported_rules': top_rules.data or [],
+            'total_reports': total,
+            'by_reason': by_reason,
+            'top_reported_rules': [{'rule_id': r, 'count': c} for r, c in sorted_rules],
             'message': 'Thank you to all contributors helping improve the scanner!'
         })
 
@@ -870,8 +864,7 @@ def feedback_stats():
         print(f"[Feedback] Stats error: {e}", flush=True)
         return jsonify({
             'total_reports': 0,
-            'confirmed_false_positives': 0,
-            'rules_improved': 0,
+            'by_reason': {},
             'top_reported_rules': [],
             'error': 'Could not fetch stats'
         })

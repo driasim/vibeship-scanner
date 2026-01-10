@@ -983,14 +983,14 @@
 							<!-- Grouped View: Categories with expandable findings -->
 							<div class="findings-grouped">
 								{#each vibeResults.grouped as group}
-									<FindingGroupCard {group} />
+									<FindingGroupCard {group} {scanId} />
 								{/each}
 							</div>
 						{:else}
 							<!-- Flat View: All findings in a list -->
 							<div class="findings-list vibe-list">
 								{#each vibeResults.findings as finding, i}
-									<FindingCard {finding} index={i} />
+									<FindingCard {finding} index={i} {scanId} />
 								{/each}
 							</div>
 						{/if}
