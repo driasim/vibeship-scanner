@@ -60,6 +60,21 @@
 	let progressPollInterval: ReturnType<typeof setInterval> | null = null;
 	const SCAN_TIMEOUT_MS = 15 * 60 * 1000;
 
+	// Keep scanner grid open once visible during SAST step (prevents flickering)
+	let scannerGridWasVisible = $state(false);
+
+	// Track scanner grid visibility - once shown during SAST, keep it open until SAST completes
+	$effect(() => {
+		const hasScanners = progress.scanners && progress.scanners.length > 0;
+		const isOnSastStep = progress.step === 'sast';
+
+		if (hasScanners && isOnSastStep) {
+			scannerGridWasVisible = true;
+		} else if (!isOnSastStep) {
+			scannerGridWasVisible = false;
+		}
+	});
+
 	// Transformed results for AI-friendly output
 	let vibeResults = $state<TransformedResults | null>(null);
 
@@ -550,7 +565,9 @@
 							stepNumber: getStepIndex(data.step),
 							totalSteps: steps.length,
 							message: data.message,
-							percent: data.percent || 0
+							percent: data.percent || 0,
+							// Preserve scanners: use new data if available, otherwise keep existing
+							scanners: data.scanners || progress.scanners || []
 						};
 					}
 				}
@@ -792,11 +809,11 @@
 		{@const stackScanners = hasScanners ? progress.scanners.filter(s => s.category === 'stack-specific') : []}
 		{@const pendingScanners = hasScanners ? progress.scanners.filter(s => s.status === 'pending' || s.status === 'running') : []}
 		{@const slowScannerInfo = {
-			'opengrep': { name: 'OpenGrep', reason: 'Deep pattern matching across your entire codebase' },
-			'slither': { name: 'Slither', reason: 'Comprehensive Solidity static analysis' },
+			'opengrep': { name: 'OpenGrep', reason: 'Scanning 1000+ security patterns across your entire codebase — this is normal and thorough, not a bug!' },
+			'slither': { name: 'Slither', reason: 'Comprehensive Solidity static analysis with 90+ detectors' },
 			'slither-upgradeability': { name: 'Slither Upgradeability', reason: 'Storage layout analysis for proxy contracts' },
-			'mythril': { name: 'Mythril', reason: 'Symbolic execution for deep vulnerability detection' },
-			'solhint': { name: 'Solhint', reason: 'Linting all Solidity files individually' }
+			'mythril': { name: 'Mythril', reason: 'Symbolic execution exploring all possible code paths' },
+			'solhint': { name: 'Solhint', reason: 'Linting all Solidity files with security rules' }
 		}}
 		{@const remainingSlowScanners = pendingScanners.filter(s => slowScannerInfo[s.name])}
 		{@const onlySlowRemaining = pendingScanners.length > 0 && pendingScanners.every(s => slowScannerInfo[s.name])}
@@ -808,7 +825,8 @@
 			<div class="progress-steps">
 				{#each steps as step, i}
 					{@const isSastStep = step.label === 'Scanning code'}
-					{@const showScannerGrid = isSastStep && isOnSastStep && hasScanners}
+					<!-- Keep scanner grid open once visible (sticky) to prevent open/close flickering -->
+					{@const showScannerGrid = isSastStep && isOnSastStep && (hasScanners || scannerGridWasVisible)}
 
 					<div class="step" class:active={i === progress.stepNumber} class:complete={i < progress.stepNumber} class:expanded={showScannerGrid}>
 						<div class="step-main">
