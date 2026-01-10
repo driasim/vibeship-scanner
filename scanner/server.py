@@ -42,16 +42,30 @@ STEP_MAP = {
     'complete': 7
 }
 
-def update_progress(supabase: Client, scan_id: str, step: str, message: str, percent: int):
+def update_progress(supabase: Client, scan_id: str, step: str, message: str, percent: int, scanners: list = None):
+    """Update scan progress with optional scanner details."""
     step_number = STEP_MAP.get(step, 0)
-    supabase.table('scan_progress').insert({
+    data = {
         'scan_id': scan_id,
         'step': step,
         'step_number': step_number,
         'total_steps': 7,
         'percent': percent,
         'message': message
-    }).execute()
+    }
+    # Add scanner progress if provided
+    if scanners is not None:
+        data['scanners'] = scanners
+
+    try:
+        supabase.table('scan_progress').insert(data).execute()
+    except Exception as e:
+        # If insert fails (e.g., scanners column doesn't exist yet), retry without scanners
+        if scanners is not None and 'scanners' in str(e):
+            data.pop('scanners', None)
+            supabase.table('scan_progress').insert(data).execute()
+        else:
+            raise
 
 def update_scan(supabase: Client, scan_id: str, data: dict):
     supabase.table('scans').update(data).eq('id', scan_id).execute()
@@ -171,10 +185,30 @@ def run_scan(scan_id: str, repo_url: str, branch: str, github_token: str = None)
             update_progress(supabase, scan_id, 'detect', 'Detecting stack...', 25)
             stack = detect_stack(repo_dir)
 
-            # Run all scanners using consolidated function
+            # Create callback to update progress as each scanner completes
+            def on_scanner_complete(status):
+                """Called when each scanner completes - updates real-time progress."""
+                completed = status['completed']
+                total = status['total']
+                current = status['current_scanner']
+                findings = status['findings']
+                scanner_status = status['status']
+
+                # Build progress message
+                if scanner_status == 'complete':
+                    msg = f"{current}: {findings} findings ({completed}/{total} scanners)"
+                else:
+                    msg = f"{current}: error ({completed}/{total} scanners)"
+
+                update_progress(
+                    supabase, scan_id, 'sast', msg, status['percent'],
+                    scanners=status['scanners']
+                )
+
+            # Run all scanners using consolidated function with progress callback
             update_progress(supabase, scan_id, 'sast', 'Running security scanners in parallel...', 40)
 
-            scan_result = run_all_scanners(repo_dir, stack)
+            scan_result = run_all_scanners(repo_dir, stack, on_scanner_complete=on_scanner_complete)
             all_findings = scan_result['findings']
 
             # Log scanner results

@@ -27,7 +27,16 @@
 		stepNumber: 0,
 		totalSteps: 5,
 		message: 'Starting scan...',
-		percent: 0
+		percent: 0,
+		scanners: [] as Array<{
+			name: string;
+			category: string;
+			targets: string;
+			trigger: string;
+			status: 'pending' | 'running' | 'complete' | 'error';
+			findings: number;
+			duration_ms: number;
+		}>
 	});
 	let results = $state<any>(null);
 	let error = $state<string | null>(null);
@@ -392,7 +401,8 @@
 				stepNumber: getStepIndex(data.step),
 				totalSteps: steps.length,
 				message: data.message,
-				percent: data.percent || 0
+				percent: data.percent || 0,
+				scanners: data.scanners || []
 			};
 		}
 	}
@@ -808,6 +818,88 @@
 
 			<p class="progress-message">{progress.message}</p>
 
+			<!-- Scanner Progress Detail -->
+			{#if progress.scanners && progress.scanners.length > 0}
+				{@const completedCount = progress.scanners.filter(s => s.status === 'complete' || s.status === 'error').length}
+				{@const totalCount = progress.scanners.length}
+				{@const universalScanners = progress.scanners.filter(s => s.category === 'universal')}
+				{@const stackScanners = progress.scanners.filter(s => s.category === 'stack-specific')}
+
+				<div class="scanner-progress">
+					<div class="scanner-header">
+						<span class="scanner-count">{completedCount}/{totalCount} scanners complete</span>
+					</div>
+
+					<!-- Universal Scanners -->
+					<div class="scanner-group">
+						<div class="scanner-group-label">Universal Scanners</div>
+						{#each universalScanners as scanner}
+							<div class="scanner-item" class:complete={scanner.status === 'complete'} class:running={scanner.status === 'running'} class:error={scanner.status === 'error'}>
+								<span class="scanner-status">
+									{#if scanner.status === 'complete'}
+										<span class="status-icon complete">✓</span>
+									{:else if scanner.status === 'running'}
+										<span class="status-icon running"></span>
+									{:else if scanner.status === 'error'}
+										<span class="status-icon error">✗</span>
+									{:else}
+										<span class="status-icon pending">○</span>
+									{/if}
+								</span>
+								<span class="scanner-name">{scanner.name}</span>
+								<span class="scanner-dots"></span>
+								<span class="scanner-result">
+									{#if scanner.status === 'complete'}
+										{scanner.findings} findings
+									{:else if scanner.status === 'running'}
+										analyzing...
+									{:else if scanner.status === 'error'}
+										error
+									{:else}
+										waiting
+									{/if}
+								</span>
+							</div>
+						{/each}
+					</div>
+
+					<!-- Stack-Specific Scanners -->
+					{#if stackScanners.length > 0}
+						<div class="scanner-group">
+							<div class="scanner-group-label">Stack-Specific Scanners</div>
+							{#each stackScanners as scanner}
+								<div class="scanner-item" class:complete={scanner.status === 'complete'} class:running={scanner.status === 'running'} class:error={scanner.status === 'error'}>
+									<span class="scanner-status">
+										{#if scanner.status === 'complete'}
+											<span class="status-icon complete">✓</span>
+										{:else if scanner.status === 'running'}
+											<span class="status-icon running"></span>
+										{:else if scanner.status === 'error'}
+											<span class="status-icon error">✗</span>
+										{:else}
+											<span class="status-icon pending">○</span>
+										{/if}
+									</span>
+									<span class="scanner-name">{scanner.name}</span>
+									<span class="scanner-dots"></span>
+									<span class="scanner-result">
+										{#if scanner.status === 'complete'}
+											{scanner.findings} findings
+										{:else if scanner.status === 'running'}
+											analyzing...
+										{:else if scanner.status === 'error'}
+											error
+										{:else}
+											waiting
+										{/if}
+									</span>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/if}
+
 			<button class="btn btn-cancel" onclick={cancelScan}>
 				Cancel Scan
 			</button>
@@ -1214,6 +1306,126 @@
 	.progress-message {
 		font-size: 0.9rem;
 		color: var(--text-secondary);
+	}
+
+	/* Scanner Progress Styles */
+	.scanner-progress {
+		max-width: 500px;
+		margin: 2rem auto;
+		text-align: left;
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		padding: 1rem;
+	}
+
+	.scanner-header {
+		text-align: center;
+		margin-bottom: 1rem;
+		padding-bottom: 0.75rem;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.scanner-count {
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 0.9rem;
+		color: var(--text-primary);
+		font-weight: 600;
+	}
+
+	.scanner-group {
+		margin-bottom: 1rem;
+	}
+
+	.scanner-group:last-child {
+		margin-bottom: 0;
+	}
+
+	.scanner-group-label {
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--text-tertiary);
+		margin-bottom: 0.5rem;
+		font-weight: 600;
+	}
+
+	.scanner-item {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.4rem 0;
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 0.8rem;
+		color: var(--text-secondary);
+		opacity: 0.6;
+		transition: all 0.3s ease;
+	}
+
+	.scanner-item.running {
+		opacity: 1;
+		color: var(--text-primary);
+	}
+
+	.scanner-item.complete {
+		opacity: 1;
+		color: var(--green-dim);
+	}
+
+	.scanner-item.error {
+		opacity: 1;
+		color: var(--red);
+	}
+
+	.scanner-status {
+		width: 1.2rem;
+		text-align: center;
+		flex-shrink: 0;
+	}
+
+	.status-icon {
+		display: inline-block;
+	}
+
+	.status-icon.complete {
+		color: var(--green-dim);
+	}
+
+	.status-icon.running {
+		width: 10px;
+		height: 10px;
+		border: 2px solid var(--text-tertiary);
+		border-top-color: var(--green-dim);
+		border-radius: 50%;
+		animation: spin 1s linear infinite;
+	}
+
+	.status-icon.error {
+		color: var(--red);
+	}
+
+	.status-icon.pending {
+		color: var(--text-tertiary);
+	}
+
+	.scanner-name {
+		flex-shrink: 0;
+	}
+
+	.scanner-dots {
+		flex: 1;
+		border-bottom: 1px dotted var(--border);
+		margin: 0 0.25rem;
+		height: 0.5rem;
+	}
+
+	.scanner-result {
+		flex-shrink: 0;
+		font-size: 0.75rem;
+	}
+
+	@keyframes spin {
+		to { transform: rotate(360deg); }
 	}
 
 	.security-fact {

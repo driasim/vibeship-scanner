@@ -2822,21 +2822,33 @@ function testFuzz_{contract['contract']}(uint256 input) public {{
 SCANNER_CATEGORY_UNIVERSAL = 'universal'      # Always runs
 SCANNER_CATEGORY_STACK = 'stack-specific'     # Only runs when relevant files detected
 
-def run_all_scanners(repo_dir: str, stack: Dict[str, Any] = None) -> Dict[str, Any]:
+def run_all_scanners(repo_dir: str, stack: Dict[str, Any] = None, on_scanner_complete=None) -> Dict[str, Any]:
     """
     Run all security scanners in parallel and return combined results.
 
     This is the SINGLE SOURCE OF TRUTH for scanner execution.
     server.py and scan.py main() both call this function.
 
+    Args:
+        repo_dir: Path to the repository to scan
+        stack: Detected stack info (languages, frameworks)
+        on_scanner_complete: Optional callback called when each scanner completes.
+            Signature: on_scanner_complete(scanner_status: dict)
+            scanner_status contains: {
+                'completed': int,  # Number of scanners completed so far
+                'total': int,  # Total number of scanners
+                'percent': int,  # Completion percentage (40-85 range)
+                'current_scanner': str,  # Name of scanner that just completed
+                'status': str,  # 'complete' or 'error'
+                'findings': int,  # Number of findings from this scanner
+                'duration_ms': int,  # How long this scanner took
+                'scanners': list  # Full list of scanner statuses
+            }
+
     To add a new scanner:
     1. Create run_newscanner() function above
     2. Add entry to SCANNERS list below with metadata
     3. That's it! No other changes needed.
-
-    Args:
-        repo_dir: Path to the cloned repository
-        stack: Detected stack info (from detect_stack). If None, will be auto-detected.
 
     Returns:
         Dict with keys:
@@ -3005,6 +3017,20 @@ def run_all_scanners(repo_dir: str, stack: Dict[str, Any] = None) -> Dict[str, A
     scanners_run = []
     scanners_skipped = []
 
+    # Real-time scanner status tracking for progress callbacks
+    scanner_statuses = {}
+    for s in SCANNERS:
+        scanner_statuses[s['name']] = {
+            'name': s['name'],
+            'category': s['category'],
+            'targets': s['targets'],
+            'trigger': s['trigger'],
+            'status': 'pending',  # pending, running, complete, error, skipped
+            'findings': 0,
+            'duration_ms': 0
+        }
+    completed_count = 0
+
     # Log what we detected
     print(f"[Stack] Detected languages: {', '.join(languages) if languages else 'none'}", file=sys.stderr)
     print(f"[Stack] Detected frameworks: {', '.join(frameworks) if frameworks else 'none'}", file=sys.stderr)
@@ -3015,11 +3041,12 @@ def run_all_scanners(repo_dir: str, stack: Dict[str, Any] = None) -> Dict[str, A
     print(f"[Scanners] Launching {len(SCANNERS)} scanners in parallel ({universal_count} universal + {stack_count} stack-specific)...", file=sys.stderr)
 
     with ThreadPoolExecutor(max_workers=len(SCANNERS)) as executor:
-        # Submit all scanner jobs
+        # Submit all scanner jobs and mark as running
         futures = {}
         for scanner in SCANNERS:
             name = scanner['name']
             scanner_start_times[name] = datetime.now()
+            scanner_statuses[name]['status'] = 'running'
             future = executor.submit(scanner['func'], *scanner['args'])
             futures[future] = scanner
 
@@ -3028,11 +3055,19 @@ def run_all_scanners(repo_dir: str, stack: Dict[str, Any] = None) -> Dict[str, A
             scanner = futures[future]
             name = scanner['name']
             scanner_end = datetime.now()
-            scanner_times[name] = int((scanner_end - scanner_start_times[name]).total_seconds() * 1000)
+            duration_ms = int((scanner_end - scanner_start_times[name]).total_seconds() * 1000)
+            scanner_times[name] = duration_ms
+            completed_count += 1
 
             try:
                 result = future.result()
                 scanner_findings[name] = result
+                finding_count = len(result)
+
+                # Update scanner status
+                scanner_statuses[name]['status'] = 'complete'
+                scanner_statuses[name]['findings'] = finding_count
+                scanner_statuses[name]['duration_ms'] = duration_ms
 
                 # Track if scanner actually ran (found files) or was skipped
                 # Scanners return [] for both "no findings" and "skipped"
@@ -3042,10 +3077,10 @@ def run_all_scanners(repo_dir: str, stack: Dict[str, Any] = None) -> Dict[str, A
                         'name': name,
                         'category': scanner['category'],
                         'targets': scanner['targets'],
-                        'findings': len(result),
-                        'duration_ms': scanner_times[name]
+                        'findings': finding_count,
+                        'duration_ms': duration_ms
                     })
-                    status = f"✓ {len(result)} findings"
+                    status = f"✓ {finding_count} findings"
                 else:
                     # Stack-specific scanner with 0 findings could be skipped or just clean
                     # For now, track all stack-specific as "run" if they completed without error
@@ -3054,17 +3089,38 @@ def run_all_scanners(repo_dir: str, stack: Dict[str, Any] = None) -> Dict[str, A
                         'category': scanner['category'],
                         'targets': scanner['targets'],
                         'findings': 0,
-                        'duration_ms': scanner_times[name]
+                        'duration_ms': duration_ms
                     })
                     status = "✓ clean"
 
-                print(f"[Scanners] {name} ({scanner_times[name]}ms) → {status}", file=sys.stderr)
+                print(f"[Scanners] {name} ({duration_ms}ms) → {status}", file=sys.stderr)
+
             except Exception as e:
-                print(f"[Scanners] {name} ({scanner_times[name]}ms) → ✗ error: {e}", file=sys.stderr)
+                print(f"[Scanners] {name} ({duration_ms}ms) → ✗ error: {e}", file=sys.stderr)
+                scanner_statuses[name]['status'] = 'error'
+                scanner_statuses[name]['duration_ms'] = duration_ms
                 scanners_skipped.append({
                     'name': name,
                     'reason': str(e)
                 })
+
+            # Call progress callback if provided (regardless of success/error)
+            if on_scanner_complete:
+                try:
+                    # Calculate progress percentage (scanners run from 40% to 85% of total)
+                    scanner_percent = 40 + int((completed_count / len(SCANNERS)) * 45)
+                    on_scanner_complete({
+                        'completed': completed_count,
+                        'total': len(SCANNERS),
+                        'percent': scanner_percent,
+                        'current_scanner': name,
+                        'status': scanner_statuses[name]['status'],
+                        'findings': scanner_statuses[name]['findings'],
+                        'duration_ms': scanner_statuses[name]['duration_ms'],
+                        'scanners': list(scanner_statuses.values())
+                    })
+                except Exception as cb_error:
+                    print(f"[Scanners] Progress callback error: {cb_error}", file=sys.stderr)
 
     # Build visual summary
     print(f"\n[Scanners] ══════════════════════════════════════", file=sys.stderr)
