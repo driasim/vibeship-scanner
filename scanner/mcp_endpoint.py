@@ -472,7 +472,7 @@ def execute_scan(args, github_token=None):
 
 
 def execute_status(args):
-    """Get scan status and results from Supabase"""
+    """Get scan status and results from Supabase - returns conversational, actionable response"""
     scan_id = args.get('scan_id')
 
     if not scan_id:
@@ -491,71 +491,160 @@ def execute_status(args):
         findings = scan.get('findings', [])
         counts = scan.get('finding_counts', {})
         repo_url = scan.get('target_url', 'Unknown')
+        score = scan.get('score', 0)
+        grade = scan.get('grade', 'F')
+        ship_status = scan.get('ship_status', 'danger')
 
-        return {
-            "status": "complete",
-            "score": scan.get('score'),
-            "grade": scan.get('grade'),
-            "ship_status": scan.get('ship_status'),
-            "repository": repo_url,
-            "summary": {
-                "total_findings": len(findings),
-                "critical": counts.get('critical', 0),
-                "high": counts.get('high', 0),
-                "medium": counts.get('medium', 0),
-                "low": counts.get('low', 0),
-                "info": counts.get('info', 0)
-            },
-            "findings_preview": findings[:10],  # First 10 findings
-            "has_more": len(findings) > 10,
-            "view_all": f"https://scanner.vibeship.co/scan/{scan_id}",
-            "output_options": {
-                "message": "How would you like the scan results?",
-                "options": [
-                    {
-                        "choice": "1",
-                        "name": "Full Security Report",
-                        "description": "Markdown file with UTC timestamp, git commit reference, all vulnerabilities with locations and severity",
-                        "action": f"Call scanner_export_report with scan_id: {scan_id}, then save the result to vibeship_scanner_report.md"
-                    },
-                    {
-                        "choice": "2",
-                        "name": "Master AI Fix Prompt",
-                        "description": "Markdown file with actionable fix instructions you can use to remediate all issues",
-                        "action": f"Call scanner_master_prompt with scan_id: {scan_id}, then save the result to vibeship_scanner_master_fix_prompt.md"
-                    },
-                    {
-                        "choice": "3",
-                        "name": "Both Reports",
-                        "description": "Get both the Full Security Report and the Master AI Fix Prompt",
-                        "action": f"Call scanner_export_report with scan_id: {scan_id} and save to vibeship_scanner_report.md, then call scanner_master_prompt with scan_id: {scan_id} and save to vibeship_scanner_master_fix_prompt.md"
-                    },
-                    {
-                        "choice": "4",
-                        "name": "View Online Only",
-                        "description": "Just view results in the web dashboard",
-                        "action": f"Open: https://scanner.vibeship.co/scan/{scan_id}"
-                    }
-                ],
-                "prompt": "Reply with 1, 2, 3, or 4 (or just check the link above)"
-            }
-        }
+        critical = counts.get('critical', 0)
+        high = counts.get('high', 0)
+        medium = counts.get('medium', 0)
+        low = counts.get('low', 0)
+        info = counts.get('info', 0)
+        total = len(findings)
+
+        # Build severity bars
+        def make_bar(count, max_count=50):
+            if max_count == 0:
+                return ""
+            filled = min(int((count / max(total, 1)) * 20), 20)
+            return "█" * filled + "░" * (20 - filled)
+
+        # Determine ship emoji
+        ship_emoji = "🚀" if ship_status == "ship" else "⚠️" if ship_status == "review" else "🛑"
+
+        # Build top issues preview
+        top_issues = []
+        for i, f in enumerate(findings[:5]):
+            loc = f.get('location', {})
+            file_path = loc.get('file', 'unknown')
+            line = loc.get('line', '')
+            sev = f.get('severity', 'info').upper()
+            title = f.get('title', 'Unknown')[:50]
+            top_issues.append(f"   {i+1}. [{sev}] {title}")
+            top_issues.append(f"      → {file_path}:{line}" if line else f"      → {file_path}")
+
+        top_issues_str = "\n".join(top_issues) if top_issues else "   No critical issues found!"
+
+        # Determine next action based on findings
+        if critical > 0 or high > 0:
+            urgency = "CRITICAL"
+            action_prompt = f"🚨 You have {critical + high} critical/high severity issues that need immediate attention."
+            recommendation = "I strongly recommend fixing these before deploying."
+        elif medium > 0:
+            urgency = "MODERATE"
+            action_prompt = f"⚠️ You have {medium} medium severity issues worth addressing."
+            recommendation = "Consider fixing these to improve your security posture."
+        elif total > 0:
+            urgency = "LOW"
+            action_prompt = f"ℹ️ Found {total} low-priority items."
+            recommendation = "These are minor but good to clean up when you have time."
+        else:
+            urgency = "CLEAR"
+            action_prompt = "✅ No security issues found!"
+            recommendation = "Your code looks secure. Great job!"
+
+        # Return conversational response with clear next step
+        return f"""
+╔══════════════════════════════════════════════════════════════════╗
+║  🎯 SCAN COMPLETE                                                 ║
+╚══════════════════════════════════════════════════════════════════╝
+
+📦 Repository: {repo_url}
+📊 Score: {score}/100 (Grade {grade})
+{ship_emoji} Status: {ship_status.upper()}
+
+═══════════════════════════════════════════════════════════════════
+📋 FINDINGS SUMMARY
+═══════════════════════════════════════════════════════════════════
+
+   🔴 Critical:  {critical:>4}  {make_bar(critical)}
+   🟠 High:      {high:>4}  {make_bar(high)}
+   🟡 Medium:    {medium:>4}  {make_bar(medium)}
+   ⚪ Low:       {low:>4}  {make_bar(low)}
+   ℹ️  Info:      {info:>4}  {make_bar(info)}
+   ─────────────────
+   📊 Total:    {total:>4}
+
+═══════════════════════════════════════════════════════════════════
+🔝 TOP ISSUES TO FIX
+═══════════════════════════════════════════════════════════════════
+
+{top_issues_str}
+
+═══════════════════════════════════════════════════════════════════
+⚡ URGENCY: {urgency}
+═══════════════════════════════════════════════════════════════════
+
+{action_prompt}
+{recommendation}
+
+═══════════════════════════════════════════════════════════════════
+🛠️  READY TO FIX?
+═══════════════════════════════════════════════════════════════════
+
+I can help you fix these issues automatically. Just say:
+
+   "Yes, fix these issues"
+
+   → I'll call scanner_master_prompt to get the fix guide and start
+     working through each issue one by one.
+
+Or choose an option:
+   • "Show me the full report" → I'll generate a detailed security report
+   • "Just show me the link" → https://scanner.vibeship.co/scan/{scan_id}
+
+═══════════════════════════════════════════════════════════════════
+
+💡 TIP: Say "fix" and I'll start resolving issues immediately!
+"""
     elif status == 'scanning':
-        return {
-            "status": "scanning",
-            "message": "Scan in progress...",
-            "tip": "Check again in a few seconds"
-        }
+        # Get progress info if available
+        progress_result = supabase.table('scan_progress').select('*').eq('scan_id', scan_id).order('created_at', desc=True).limit(1).execute()
+
+        progress_msg = "Scanning in progress..."
+        percent = 0
+        step = "scanning"
+
+        if progress_result.data:
+            p = progress_result.data[0]
+            progress_msg = p.get('message', progress_msg)
+            percent = p.get('percent', 0)
+            step = p.get('step', step)
+
+        progress_bar = "█" * int(percent / 5) + "░" * (20 - int(percent / 5))
+
+        return f"""
+⏳ SCAN IN PROGRESS...
+
+   [{progress_bar}] {percent}%
+
+   Current step: {step}
+   {progress_msg}
+
+   ⏱️  This typically takes 1-3 minutes depending on repo size.
+
+   I'll check again automatically... (or call scanner_status again)
+"""
     elif status == 'failed':
-        return {
-            "status": "failed",
-            "error": scan.get('error_message', 'Unknown error')
-        }
+        error_msg = scan.get('error_message', 'Unknown error')
+        return f"""
+❌ SCAN FAILED
+
+   Error: {error_msg}
+
+   Possible causes:
+   • Repository doesn't exist or is private
+   • Network timeout during clone
+   • Repository too large
+
+   💡 Try again with: scanner_scan with the repo URL
+"""
     else:
-        return {
-            "status": status,
-            "message": "Scan status unknown"
-        }
+        return f"""
+❓ UNKNOWN STATUS: {status}
+
+   The scan may still be initializing. Try checking again in a moment.
+"""
 
 
 def execute_cve_lookup(args):
