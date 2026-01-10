@@ -824,6 +824,16 @@
 				{@const totalCount = progress.scanners.length}
 				{@const universalScanners = progress.scanners.filter(s => s.category === 'universal')}
 				{@const stackScanners = progress.scanners.filter(s => s.category === 'stack-specific')}
+				{@const pendingScanners = progress.scanners.filter(s => s.status === 'pending' || s.status === 'running')}
+				{@const slowScannerInfo = {
+					'opengrep': { name: 'OpenGrep', reason: 'Deep pattern matching across your entire codebase' },
+					'slither': { name: 'Slither', reason: 'Comprehensive Solidity static analysis' },
+					'slither-upgradeability': { name: 'Slither Upgradeability', reason: 'Storage layout analysis for proxy contracts' },
+					'mythril': { name: 'Mythril', reason: 'Symbolic execution for deep vulnerability detection' },
+					'solhint': { name: 'Solhint', reason: 'Linting all Solidity files individually' }
+				}}
+				{@const remainingSlowScanners = pendingScanners.filter(s => slowScannerInfo[s.name])}
+				{@const onlySlowRemaining = pendingScanners.length > 0 && pendingScanners.every(s => slowScannerInfo[s.name])}
 
 				<div class="scanner-progress">
 					<div class="scanner-header">
@@ -895,6 +905,29 @@
 									</span>
 								</div>
 							{/each}
+						</div>
+					{/if}
+
+					<!-- Slow scanner tooltip - shows when only slow scanners remain -->
+					{#if onlySlowRemaining && remainingSlowScanners.length > 0}
+						<div class="slow-scanner-notice">
+							<span class="notice-icon">⏱️</span>
+							<div class="notice-content">
+								<span class="notice-title">
+									{#if remainingSlowScanners.length === 1}
+										{slowScannerInfo[remainingSlowScanners[0].name]?.name || remainingSlowScanners[0].name} takes longer
+									{:else}
+										Deep analysis in progress
+									{/if}
+								</span>
+								<span class="notice-text">
+									{#if remainingSlowScanners.length === 1}
+										{slowScannerInfo[remainingSlowScanners[0].name]?.reason || 'This scanner performs thorough analysis'}. This is normal and ensures comprehensive coverage.
+									{:else}
+										{remainingSlowScanners.map(s => slowScannerInfo[s.name]?.name || s.name).join(', ')} perform deep analysis. This is normal and ensures thorough security coverage.
+									{/if}
+								</span>
+							</div>
 						</div>
 					{/if}
 				</div>
@@ -1426,6 +1459,48 @@
 
 	@keyframes spin {
 		to { transform: rotate(360deg); }
+	}
+
+	/* Slow scanner notice */
+	.slow-scanner-notice {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		margin-top: 1rem;
+		padding: 0.75rem 1rem;
+		background: rgba(var(--yellow-rgb, 234, 179, 8), 0.08);
+		border: 1px solid rgba(var(--yellow-rgb, 234, 179, 8), 0.2);
+		border-radius: 6px;
+		animation: fadeIn 0.3s ease;
+	}
+
+	.notice-icon {
+		font-size: 1rem;
+		line-height: 1;
+		flex-shrink: 0;
+	}
+
+	.notice-content {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
+	.notice-title {
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--text-primary);
+	}
+
+	.notice-text {
+		font-size: 0.75rem;
+		color: var(--text-secondary);
+		line-height: 1.4;
+	}
+
+	@keyframes fadeIn {
+		from { opacity: 0; transform: translateY(-5px); }
+		to { opacity: 1; transform: translateY(0); }
 	}
 
 	.security-fact {
