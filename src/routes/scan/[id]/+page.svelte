@@ -835,99 +835,91 @@
 				{@const remainingSlowScanners = pendingScanners.filter(s => slowScannerInfo[s.name])}
 				{@const onlySlowRemaining = pendingScanners.length > 0 && pendingScanners.every(s => slowScannerInfo[s.name])}
 
-				<div class="scanner-progress">
-					<div class="scanner-header">
-						<span class="scanner-count">{completedCount}/{totalCount} scanners complete</span>
+				<div class="scanner-grid-container">
+					<div class="scanner-grid-header">
+						<span class="scanner-grid-title">SECURITY SCANNERS</span>
+						<span class="scanner-grid-count">{completedCount}/{totalCount}</span>
 					</div>
 
-					<!-- Universal Scanners -->
-					<div class="scanner-group">
-						<div class="scanner-group-label">Universal Scanners</div>
-						{#each universalScanners as scanner}
-							<div class="scanner-item" class:complete={scanner.status === 'complete'} class:running={scanner.status === 'running'} class:error={scanner.status === 'error'}>
-								<span class="scanner-status">
-									{#if scanner.status === 'complete'}
-										<span class="status-icon complete">✓</span>
-									{:else if scanner.status === 'running'}
-										<span class="status-icon running"></span>
-									{:else if scanner.status === 'error'}
-										<span class="status-icon error">✗</span>
-									{:else}
-										<span class="status-icon pending">○</span>
-									{/if}
-								</span>
-								<span class="scanner-name">{scanner.name}</span>
-								<span class="scanner-dots"></span>
-								<span class="scanner-result">
-									{#if scanner.status === 'complete'}
-										{scanner.findings} findings
-									{:else if scanner.status === 'running'}
-										analyzing...
-									{:else if scanner.status === 'error'}
-										error
-									{:else}
-										waiting
-									{/if}
-								</span>
-							</div>
-						{/each}
-					</div>
-
-					<!-- Stack-Specific Scanners -->
-					{#if stackScanners.length > 0}
-						<div class="scanner-group">
-							<div class="scanner-group-label">Stack-Specific Scanners</div>
-							{#each stackScanners as scanner}
-								<div class="scanner-item" class:complete={scanner.status === 'complete'} class:running={scanner.status === 'running'} class:error={scanner.status === 'error'}>
-									<span class="scanner-status">
+					<div class="scanner-grid">
+						<!-- Universal Scanners Column -->
+						<div class="scanner-column">
+							<div class="scanner-column-label">Universal</div>
+							{#each universalScanners as scanner}
+								<div class="scanner-row" class:complete={scanner.status === 'complete'} class:running={scanner.status === 'running'} class:error={scanner.status === 'error'}>
+									<span class="scanner-indicator">
 										{#if scanner.status === 'complete'}
-											<span class="status-icon complete">✓</span>
+											<span class="indicator-done">✓</span>
 										{:else if scanner.status === 'running'}
-											<span class="status-icon running"></span>
+											<span class="indicator-active"></span>
 										{:else if scanner.status === 'error'}
-											<span class="status-icon error">✗</span>
+											<span class="indicator-error">✗</span>
 										{:else}
-											<span class="status-icon pending">○</span>
+											<span class="indicator-pending">·</span>
 										{/if}
 									</span>
-									<span class="scanner-name">{scanner.name}</span>
-									<span class="scanner-dots"></span>
-									<span class="scanner-result">
+									<span class="scanner-label">{scanner.name}</span>
+									<span class="scanner-value">
 										{#if scanner.status === 'complete'}
-											{scanner.findings} findings
+											{scanner.findings}
 										{:else if scanner.status === 'running'}
-											analyzing...
+											...
 										{:else if scanner.status === 'error'}
-											error
+											err
 										{:else}
-											waiting
+											—
 										{/if}
 									</span>
 								</div>
 							{/each}
 						</div>
-					{/if}
 
-					<!-- Slow scanner tooltip - shows when only slow scanners remain -->
-					{#if onlySlowRemaining && remainingSlowScanners.length > 0}
-						<div class="slow-scanner-notice">
-							<span class="notice-icon">⏱️</span>
-							<div class="notice-content">
-								<span class="notice-title">
-									{#if remainingSlowScanners.length === 1}
-										{slowScannerInfo[remainingSlowScanners[0].name]?.name || remainingSlowScanners[0].name} takes longer
-									{:else}
-										Deep analysis in progress
-									{/if}
-								</span>
-								<span class="notice-text">
-									{#if remainingSlowScanners.length === 1}
-										{slowScannerInfo[remainingSlowScanners[0].name]?.reason || 'This scanner performs thorough analysis'}. This is normal and ensures comprehensive coverage.
-									{:else}
-										{remainingSlowScanners.map(s => slowScannerInfo[s.name]?.name || s.name).join(', ')} perform deep analysis. This is normal and ensures thorough security coverage.
-									{/if}
-								</span>
+						<!-- Stack-Specific Scanners Column -->
+						{#if stackScanners.length > 0}
+							<div class="scanner-column">
+								<div class="scanner-column-label">Stack-Specific</div>
+								{#each stackScanners as scanner}
+									<div class="scanner-row" class:complete={scanner.status === 'complete'} class:running={scanner.status === 'running'} class:error={scanner.status === 'error'}>
+										<span class="scanner-indicator">
+											{#if scanner.status === 'complete'}
+												<span class="indicator-done">✓</span>
+											{:else if scanner.status === 'running'}
+												<span class="indicator-active"></span>
+											{:else if scanner.status === 'error'}
+												<span class="indicator-error">✗</span>
+											{:else}
+												<span class="indicator-pending">·</span>
+											{/if}
+										</span>
+										<span class="scanner-label">{scanner.name}</span>
+										<span class="scanner-value">
+											{#if scanner.status === 'complete'}
+												{scanner.findings}
+											{:else if scanner.status === 'running'}
+												...
+											{:else if scanner.status === 'error'}
+												err
+											{:else}
+												—
+											{/if}
+										</span>
+									</div>
+								{/each}
 							</div>
+						{/if}
+					</div>
+
+					<!-- Slow scanner notice - integrated into grid -->
+					{#if onlySlowRemaining && remainingSlowScanners.length > 0}
+						<div class="scanner-notice">
+							<span class="notice-indicator">⏱</span>
+							<span class="notice-message">
+								{#if remainingSlowScanners.length === 1}
+									{slowScannerInfo[remainingSlowScanners[0].name]?.name || remainingSlowScanners[0].name}: {slowScannerInfo[remainingSlowScanners[0].name]?.reason || 'Deep analysis in progress'}
+								{:else}
+									Deep analysis: {remainingSlowScanners.map(s => slowScannerInfo[s.name]?.name || s.name).join(', ')}
+								{/if}
+							</span>
 						</div>
 					{/if}
 				</div>
@@ -1341,166 +1333,164 @@
 		color: var(--text-secondary);
 	}
 
-	/* Scanner Progress Styles */
-	.scanner-progress {
-		max-width: 500px;
+	/* Scanner Grid - Vibeship Style */
+	.scanner-grid-container {
+		max-width: 600px;
 		margin: 2rem auto;
-		text-align: left;
-		background: var(--bg-secondary);
 		border: 1px solid var(--border);
-		border-radius: 8px;
-		padding: 1rem;
+		background: var(--bg-primary);
 	}
 
-	.scanner-header {
-		text-align: center;
-		margin-bottom: 1rem;
-		padding-bottom: 0.75rem;
+	.scanner-grid-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 0.75rem 1rem;
+		border-bottom: 1px solid var(--border);
+		background: var(--bg-secondary);
+	}
+
+	.scanner-grid-title {
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 0.7rem;
+		font-weight: 600;
+		letter-spacing: 0.1em;
+		color: var(--text-tertiary);
+	}
+
+	.scanner-grid-count {
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: var(--green-dim);
+	}
+
+	.scanner-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+	}
+
+	.scanner-column {
+		padding: 0.75rem 1rem;
+	}
+
+	.scanner-column:first-child {
+		border-right: 1px solid var(--border);
+	}
+
+	.scanner-column-label {
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 0.65rem;
+		font-weight: 600;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+		color: var(--text-tertiary);
+		margin-bottom: 0.5rem;
+		padding-bottom: 0.5rem;
 		border-bottom: 1px solid var(--border);
 	}
 
-	.scanner-count {
-		font-family: 'JetBrains Mono', monospace;
-		font-size: 0.9rem;
-		color: var(--text-primary);
-		font-weight: 600;
-	}
-
-	.scanner-group {
-		margin-bottom: 1rem;
-	}
-
-	.scanner-group:last-child {
-		margin-bottom: 0;
-	}
-
-	.scanner-group-label {
-		font-size: 0.7rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--text-tertiary);
-		margin-bottom: 0.5rem;
-		font-weight: 600;
-	}
-
-	.scanner-item {
+	.scanner-row {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.4rem 0;
+		padding: 0.35rem 0;
 		font-family: 'JetBrains Mono', monospace;
-		font-size: 0.8rem;
-		color: var(--text-secondary);
-		opacity: 0.6;
-		transition: all 0.3s ease;
+		font-size: 0.75rem;
+		color: var(--text-tertiary);
+		transition: color 0.2s;
 	}
 
-	.scanner-item.running {
-		opacity: 1;
+	.scanner-row.running {
 		color: var(--text-primary);
 	}
 
-	.scanner-item.complete {
-		opacity: 1;
+	.scanner-row.complete {
 		color: var(--green-dim);
 	}
 
-	.scanner-item.error {
-		opacity: 1;
+	.scanner-row.error {
 		color: var(--red);
 	}
 
-	.scanner-status {
-		width: 1.2rem;
+	.scanner-indicator {
+		width: 1rem;
 		text-align: center;
 		flex-shrink: 0;
 	}
 
-	.status-icon {
-		display: inline-block;
-	}
-
-	.status-icon.complete {
+	.indicator-done {
 		color: var(--green-dim);
 	}
 
-	.status-icon.running {
-		width: 10px;
-		height: 10px;
-		border: 2px solid var(--text-tertiary);
+	.indicator-active {
+		display: inline-block;
+		width: 8px;
+		height: 8px;
+		border: 1.5px solid var(--text-tertiary);
 		border-top-color: var(--green-dim);
 		border-radius: 50%;
-		animation: spin 1s linear infinite;
+		animation: spin 0.8s linear infinite;
 	}
 
-	.status-icon.error {
+	.indicator-error {
 		color: var(--red);
 	}
 
-	.status-icon.pending {
+	.indicator-pending {
 		color: var(--text-tertiary);
+		opacity: 0.5;
 	}
 
-	.scanner-name {
-		flex-shrink: 0;
-	}
-
-	.scanner-dots {
+	.scanner-label {
 		flex: 1;
-		border-bottom: 1px dotted var(--border);
-		margin: 0 0.25rem;
-		height: 0.5rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
-	.scanner-result {
-		flex-shrink: 0;
-		font-size: 0.75rem;
+	.scanner-value {
+		font-size: 0.7rem;
+		min-width: 2rem;
+		text-align: right;
+		opacity: 0.8;
 	}
 
 	@keyframes spin {
 		to { transform: rotate(360deg); }
 	}
 
-	/* Slow scanner notice */
-	.slow-scanner-notice {
+	/* Slow scanner notice - integrated */
+	.scanner-notice {
 		display: flex;
-		align-items: flex-start;
-		gap: 0.75rem;
-		margin-top: 1rem;
-		padding: 0.75rem 1rem;
-		background: rgba(var(--yellow-rgb, 234, 179, 8), 0.08);
-		border: 1px solid rgba(var(--yellow-rgb, 234, 179, 8), 0.2);
-		border-radius: 6px;
-		animation: fadeIn 0.3s ease;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.6rem 1rem;
+		border-top: 1px solid var(--border);
+		background: var(--bg-secondary);
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 0.7rem;
+		color: var(--text-secondary);
 	}
 
-	.notice-icon {
-		font-size: 1rem;
-		line-height: 1;
+	.notice-indicator {
 		flex-shrink: 0;
 	}
 
-	.notice-content {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
+	.notice-message {
+		opacity: 0.8;
 	}
 
-	.notice-title {
-		font-size: 0.8rem;
-		font-weight: 600;
-		color: var(--text-primary);
-	}
+	/* Responsive: stack columns on mobile */
+	@media (max-width: 500px) {
+		.scanner-grid {
+			grid-template-columns: 1fr;
+		}
 
-	.notice-text {
-		font-size: 0.75rem;
-		color: var(--text-secondary);
-		line-height: 1.4;
-	}
-
-	@keyframes fadeIn {
-		from { opacity: 0; transform: translateY(-5px); }
-		to { opacity: 1; transform: translateY(0); }
+		.scanner-column:first-child {
+			border-right: none;
+			border-bottom: 1px solid var(--border);
+		}
 	}
 
 	.security-fact {
