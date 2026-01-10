@@ -652,8 +652,8 @@ def report_false_positive():
                 'rule_message': data.get('rule_message', ''),
                 'severity': data.get('severity', 'WARNING'),
                 'language': data.get('language'),
-                'ast_structure': None,  # No code = no AST
-                'pattern_hash': None,   # No code = no pattern hash
+                'ast_structure': 'ULTRA_PRIVACY_NO_CODE',  # Marker for ultra-privacy reports
+                'pattern_hash': 'ULTRA_PRIVACY',           # No code = no pattern hash
                 'structural_hints': [],
                 'framework_hints': [],
                 'reason_category': data.get('reason_category'),
