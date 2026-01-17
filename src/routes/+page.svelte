@@ -21,6 +21,8 @@
 	const tools = ['Claude Code', 'Cursor', 'Windsurf', 'Replit', 'GPT', 'Gemini'];
 	let currentToolIndex = $state(0);
 
+	const mcpCommand = 'claude mcp add vibeship-scanner -- npx mcp-remote https://scanner.vibeship.co/mcp';
+
 	const placeholders = [
 		'your-startup/next-big-thing',
 		'awesome-dev/side-project',
@@ -672,37 +674,15 @@
 		<p class="mcp-subtitle">Use Vibeship Scanner directly in Claude, Cursor, or any MCP-compatible assistant.</p>
 
 		<div class="mcp-config">
-			<div class="terminal">
-				<div class="terminal-header">
-					<div class="terminal-dots">
-						<span class="dot red"></span>
-						<span class="dot yellow"></span>
-						<span class="dot green"></span>
-					</div>
-					<span class="terminal-title">claude_desktop_config.json</span>
-					<button class="copy-btn" onclick={() => {
-						navigator.clipboard.writeText(`{
-  "mcpServers": {
-    "vibeship-scanner": {
-      "command": "npx",
-      "args": ["mcp-remote", "https://scanner.vibeship.co/mcp"]
-    }
-  }
-}`);
-						const btn = document.querySelector('.copy-btn');
-						if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); }
-					}}>Copy</button>
-				</div>
-				<div class="terminal-body mcp-code">
-					<pre><code>{`{
-  "mcpServers": {
-    "vibeship-scanner": {
-      "command": "npx",
-      "args": ["mcp-remote", "https://scanner.vibeship.co/mcp"]
-    }
-  }
-}`}</code></pre>
-				</div>
+			<div class="mcp-command-bar">
+				<code class="mcp-command-text">
+					<span class="mcp-cmd-highlight">claude mcp add</span> vibeship-scanner -- npx mcp-remote https://scanner.vibeship.co/mcp
+				</code>
+				<button class="mcp-copy-btn" onclick={() => {
+					navigator.clipboard.writeText(mcpCommand);
+					const btn = document.querySelector('.mcp-copy-btn');
+					if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); }
+				}}>Copy</button>
 			</div>
 		</div>
 
@@ -1870,42 +1850,43 @@
 		margin-bottom: 3rem;
 	}
 
-	.mcp-config .terminal {
-		max-width: 600px;
+	.mcp-command-bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		max-width: 750px;
 		margin: 0 auto;
+		padding: 1rem 1.25rem;
+		background: #0d1117;
+		border: 1px solid #30363d;
 	}
 
-	.mcp-config .terminal-body {
-		padding: 1.25rem;
-		max-height: none;
-	}
-
-	.mcp-code pre {
-		margin: 0;
-	}
-
-	.mcp-code code {
+	.mcp-command-text {
 		font-family: 'JetBrains Mono', monospace;
-		font-size: 0.8rem;
+		font-size: 0.85rem;
 		color: #e2e4e9;
-		line-height: 1.6;
+		word-break: break-all;
 	}
 
-	.copy-btn {
+	.mcp-cmd-highlight {
+		color: var(--green);
+	}
+
+	.mcp-copy-btn {
+		flex-shrink: 0;
 		font-family: 'JetBrains Mono', monospace;
-		font-size: 0.65rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--text-inverse);
-		background: rgba(255, 255, 255, 0.1);
-		border: 1px solid rgba(255, 255, 255, 0.2);
-		padding: 0.25rem 0.75rem;
+		font-size: 0.75rem;
+		color: #e2e4e9;
+		background: rgba(255, 255, 255, 0.08);
+		border: 1px solid #30363d;
+		padding: 0.4rem 1rem;
 		cursor: pointer;
 		transition: all 0.15s;
 	}
 
-	.copy-btn:hover {
-		background: rgba(255, 255, 255, 0.15);
+	.mcp-copy-btn:hover {
+		background: rgba(255, 255, 255, 0.12);
 		border-color: var(--green-dim);
 		color: var(--green);
 	}
@@ -2040,12 +2021,19 @@
 			grid-template-columns: 1fr;
 		}
 
-		.mcp-config .terminal-body {
+		.mcp-command-bar {
+			flex-direction: column;
+			align-items: stretch;
+			gap: 0.75rem;
 			padding: 1rem;
 		}
 
-		.mcp-code code {
+		.mcp-command-text {
 			font-size: 0.7rem;
+		}
+
+		.mcp-copy-btn {
+			align-self: flex-end;
 		}
 
 		.mcp-tool {
