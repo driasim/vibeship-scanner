@@ -220,9 +220,7 @@
 	<section class="hero">
 		<p class="hero-label">Free security scanner for vibe coders</p>
 		<h1>
-			{#key currentToolIndex}
-				<span class="ai-rotate">You built it with <span class="ai-tool">{tools[currentToolIndex]}</span></span>
-			{/key}<br>
+			You built it with {#key currentToolIndex}<span class="ai-rotate ai-tool">{tools[currentToolIndex]}</span>{/key}<br>
 			Let's make sure it's <em>secure</em>.
 		</h1>
 		<p class="hero-sub">
@@ -664,6 +662,131 @@
 				<p>Get clear recommendations for each issue, or just point your AI to it and let it cook.</p>
 			</div>
 		</div>
+	</div>
+</section>
+
+<section class="mcp" id="mcp">
+	<div class="mcp-inner">
+		<p class="section-label">For AI Assistants</p>
+		<h2 class="section-title">MCP Integration</h2>
+		<p class="mcp-subtitle">Use Vibeship Scanner directly in Claude, Cursor, or any MCP-compatible assistant.</p>
+
+		<div class="mcp-config">
+			<div class="terminal">
+				<div class="terminal-header">
+					<div class="terminal-dots">
+						<span class="dot red"></span>
+						<span class="dot yellow"></span>
+						<span class="dot green"></span>
+					</div>
+					<span class="terminal-title">claude_desktop_config.json</span>
+					<button class="copy-btn" onclick={() => {
+						navigator.clipboard.writeText(`{
+  "mcpServers": {
+    "vibeship-scanner": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://scanner.vibeship.co/mcp"]
+    }
+  }
+}`);
+						const btn = document.querySelector('.copy-btn');
+						if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); }
+					}}>Copy</button>
+				</div>
+				<div class="terminal-body mcp-code">
+					<pre><code>{`{
+  "mcpServers": {
+    "vibeship-scanner": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://scanner.vibeship.co/mcp"]
+    }
+  }
+}`}</code></pre>
+				</div>
+			</div>
+		</div>
+
+		<div class="mcp-tools">
+			<div class="mcp-tool">
+				<div class="mcp-tool-icon">
+					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<circle cx="11" cy="11" r="8"/>
+						<path d="m21 21-4.35-4.35"/>
+					</svg>
+				</div>
+				<div class="mcp-tool-content">
+					<h4>scanner_scan</h4>
+					<p>Start a security scan on any GitHub repo</p>
+				</div>
+			</div>
+			<div class="mcp-tool">
+				<div class="mcp-tool-icon">
+					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path d="M12 8V4H8"/>
+						<rect x="2" y="2" width="20" height="20" rx="5"/>
+						<path d="M8 4l4 4-4 4"/>
+						<path d="m16 12-4 4 4 4"/>
+					</svg>
+				</div>
+				<div class="mcp-tool-content">
+					<h4>scanner_master_prompt</h4>
+					<p>Get AI fix guide with task list for systematic fixing</p>
+				</div>
+			</div>
+			<div class="mcp-tool">
+				<div class="mcp-tool-icon">
+					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+					</svg>
+				</div>
+				<div class="mcp-tool-content">
+					<h4>scanner_lookup_cve</h4>
+					<p>Look up CVE details from NVD database</p>
+				</div>
+			</div>
+			<div class="mcp-tool">
+				<div class="mcp-tool-icon">
+					<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+						<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+					</svg>
+				</div>
+				<div class="mcp-tool-content">
+					<h4>scanner_status</h4>
+					<p>Check scan progress with live updates</p>
+				</div>
+			</div>
+		</div>
+
+		<div class="mcp-example">
+			<p class="mcp-example-label">Example conversation</p>
+			<div class="mcp-chat">
+				<div class="mcp-message user">
+					<span class="mcp-role">You</span>
+					<span class="mcp-text">Scan my repo for security issues</span>
+				</div>
+				<div class="mcp-message assistant">
+					<span class="mcp-role">Claude</span>
+					<span class="mcp-text">Found 12 vulnerabilities (3 critical, 4 high). Should I fix these issues?</span>
+				</div>
+				<div class="mcp-message user">
+					<span class="mcp-role">You</span>
+					<span class="mcp-text">Yes, fix them</span>
+				</div>
+				<div class="mcp-message assistant">
+					<span class="mcp-role">Claude</span>
+					<span class="mcp-text">Creating task list and working through each fix systematically...</span>
+				</div>
+			</div>
+		</div>
+
+		<a href="https://github.com/vibeship/vibeship-scanner" target="_blank" rel="noopener noreferrer" class="mcp-docs-link">
+			<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+				<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+				<polyline points="15 3 21 3 21 9"/>
+				<line x1="10" y1="14" x2="21" y2="3"/>
+			</svg>
+			Learn more about MCP
+		</a>
 	</div>
 </section>
 
@@ -1715,5 +1838,230 @@
 	:global([data-theme="light"]) .cta-wrapper::before,
 	:global(:root:not([data-theme="dark"])) .cta-wrapper::before {
 		display: none;
+	}
+
+	/* MCP Section */
+	.mcp {
+		padding: 6rem 3rem;
+		border-top: 1px solid var(--border);
+		background: var(--bg-primary);
+	}
+
+	.mcp-inner {
+		max-width: 900px;
+		margin: 0 auto;
+	}
+
+	.mcp .section-title {
+		font-family: 'Instrument Serif', serif;
+		font-size: 2.5rem;
+		font-weight: 400;
+		margin-bottom: 0.5rem;
+		letter-spacing: -0.02em;
+	}
+
+	.mcp-subtitle {
+		font-size: 1.1rem;
+		color: var(--text-secondary);
+		margin-bottom: 3rem;
+	}
+
+	.mcp-config {
+		margin-bottom: 3rem;
+	}
+
+	.mcp-config .terminal {
+		max-width: 600px;
+		margin: 0 auto;
+	}
+
+	.mcp-config .terminal-body {
+		padding: 1.25rem;
+		max-height: none;
+	}
+
+	.mcp-code pre {
+		margin: 0;
+	}
+
+	.mcp-code code {
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 0.8rem;
+		color: #e2e4e9;
+		line-height: 1.6;
+	}
+
+	.copy-btn {
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 0.65rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--text-inverse);
+		background: rgba(255, 255, 255, 0.1);
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		padding: 0.25rem 0.75rem;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.copy-btn:hover {
+		background: rgba(255, 255, 255, 0.15);
+		border-color: var(--green-dim);
+		color: var(--green);
+	}
+
+	.mcp-tools {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 1px;
+		background: var(--border);
+		border: 1px solid var(--border);
+		margin-bottom: 3rem;
+	}
+
+	.mcp-tool {
+		display: flex;
+		align-items: flex-start;
+		gap: 1rem;
+		padding: 1.5rem;
+		background: var(--bg-primary);
+		transition: background 0.15s;
+	}
+
+	.mcp-tool:hover {
+		background: var(--bg-secondary);
+	}
+
+	.mcp-tool-icon {
+		flex-shrink: 0;
+		color: var(--text-primary);
+	}
+
+	.mcp-tool-content h4 {
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 0.9rem;
+		margin-bottom: 0.25rem;
+		color: var(--green-dim);
+	}
+
+	.mcp-tool-content p {
+		font-size: 0.8rem;
+		color: var(--text-secondary);
+		line-height: 1.5;
+	}
+
+	.mcp-example {
+		background: var(--bg-secondary);
+		border: 1px solid var(--border);
+		padding: 1.5rem;
+		margin-bottom: 2rem;
+	}
+
+	.mcp-example-label {
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.1em;
+		color: var(--text-tertiary);
+		margin-bottom: 1rem;
+	}
+
+	.mcp-chat {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.mcp-message {
+		display: flex;
+		gap: 0.75rem;
+		align-items: baseline;
+	}
+
+	.mcp-role {
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		flex-shrink: 0;
+		width: 50px;
+	}
+
+	.mcp-message.user .mcp-role {
+		color: var(--text-tertiary);
+	}
+
+	.mcp-message.assistant .mcp-role {
+		color: var(--green-dim);
+	}
+
+	.mcp-text {
+		font-size: 0.85rem;
+		color: var(--text-secondary);
+		line-height: 1.5;
+	}
+
+	.mcp-message.assistant .mcp-text {
+		color: var(--text-primary);
+	}
+
+	.mcp-docs-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.85rem;
+		color: var(--text-secondary);
+		text-decoration: none;
+		transition: color 0.15s;
+	}
+
+	.mcp-docs-link:hover {
+		color: var(--green-dim);
+	}
+
+	.mcp-docs-link svg {
+		stroke: currentColor;
+	}
+
+	@media (max-width: 768px) {
+		.mcp {
+			padding: 4rem 1.5rem;
+		}
+
+		.mcp .section-title {
+			font-size: 2rem;
+		}
+
+		.mcp-subtitle {
+			font-size: 1rem;
+			margin-bottom: 2rem;
+		}
+
+		.mcp-tools {
+			grid-template-columns: 1fr;
+		}
+
+		.mcp-config .terminal-body {
+			padding: 1rem;
+		}
+
+		.mcp-code code {
+			font-size: 0.7rem;
+		}
+
+		.mcp-tool {
+			padding: 1.25rem;
+		}
+
+		.mcp-tool-content h4 {
+			font-size: 0.8rem;
+		}
+
+		.mcp-role {
+			width: 45px;
+		}
+
+		.mcp-text {
+			font-size: 0.8rem;
+		}
 	}
 </style>
