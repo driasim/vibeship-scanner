@@ -118,6 +118,11 @@ def clone_repo(url: str, target_dir: str, branch: str = 'main', github_token: st
                 stderr = stderr.replace(github_token, 'TOKEN_HIDDEN')
             print(f"[Clone] Branch clone failed (code {result.returncode}): {stderr}", file=sys.stderr, flush=True)
 
+            # Clean up partial clone directory before retry
+            if os.path.exists(target_dir):
+                shutil.rmtree(target_dir, ignore_errors=True)
+                print(f"[Clone] Cleaned up partial clone directory", file=sys.stderr, flush=True)
+
             print(f"[Clone] Retrying without branch specification...", file=sys.stderr, flush=True)
             result = subprocess.run(
                 ['git', 'clone', '--depth', '1', clone_url, target_dir],

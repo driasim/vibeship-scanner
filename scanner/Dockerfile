@@ -107,7 +107,7 @@ RUN pip install crytic-compile \
 RUN curl -fsSL https://raw.githubusercontent.com/opengrep/opengrep/main/install.sh | bash \
     && ln -s ~/.opengrep/cli/latest/opengrep /usr/local/bin/opengrep
 
-RUN curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.56.0
+RUN curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin v0.69.3
 
 # Pre-download Trivy vulnerability database during build
 RUN trivy fs --download-db-only
