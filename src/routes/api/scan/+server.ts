@@ -1,13 +1,16 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { hashUrl, parseRepoUrl } from '$lib/server/scan';
-import { supabase } from '$lib/supabase';
+import { createServerSupabase } from '$lib/server/supabase';
 import { SCANNER_API_URL } from '$env/static/private';
 
-async function checkRateLimit(identifier: string): Promise<{ allowed: boolean; remaining: number }> {
+async function checkRateLimit(
+	db: ReturnType<typeof createServerSupabase>,
+	identifier: string
+): Promise<{ allowed: boolean; remaining: number }> {
 	const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 
-	const { count } = await supabase
+	const { count } = await db
 		.from('scans')
 		.select('*', { count: 'exact', head: true })
 		.eq('session_id', identifier)
@@ -24,8 +27,9 @@ async function checkRateLimit(identifier: string): Promise<{ allowed: boolean; r
 
 export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 	try {
+		const db = createServerSupabase();
 		const clientIp = getClientAddress();
-		const rateLimit = await checkRateLimit(clientIp);
+		const rateLimit = await checkRateLimit(db, clientIp);
 
 		if (!rateLimit.allowed) {
 			return json(
@@ -85,7 +89,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 			session_id: clientIp
 		};
 
-		const { error: dbError } = await supabase
+		const { error: dbError } = await db
 			.from('scans')
 			.insert(scanRecord);
 
@@ -121,21 +125,33 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
 };
 
 export const GET: RequestHandler = async ({ url }) => {
+	const db = createServerSupabase();
 	const scanId = url.searchParams.get('id');
 
 	if (!scanId) {
 		return json({ error: 'id_required', message: 'Scan ID is required' }, { status: 400 });
 	}
 
-	const { data: scan, error } = await supabase
+	const { data: scan, error } = await db
 		.from('scans')
 		.select('*')
 		.eq('id', scanId)
-		.single();
+		.maybeSingle();
 
 	if (error || !scan) {
 		return json({ error: 'not_found', message: 'Scan not found' }, { status: 404 });
 	}
 
-	return json(scan);
+	const { data: progress } = await db
+		.from('scan_progress')
+		.select('*')
+		.eq('scan_id', scanId)
+		.order('created_at', { ascending: false })
+		.limit(1)
+		.maybeSingle();
+
+	return json({
+		...scan,
+		progress: progress || null
+	});
 };

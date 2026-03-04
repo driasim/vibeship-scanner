@@ -369,21 +369,32 @@
 		return index >= 0 ? index : 0;
 	}
 
-	async function fetchScan() {
-		const { data, error: fetchError } = await supabase
-			.from('scans')
-			.select('*')
-			.eq('id', scanId)
-			.single();
+	function applyProgressData(data: any) {
+		if (!data) return;
+		progress = {
+			step: data.step,
+			stepNumber: getStepIndex(data.step),
+			totalSteps: steps.length,
+			message: data.message,
+			percent: data.percent || 0,
+			scanners: data.scanners || progress.scanners || []
+		};
+	}
 
-		if (fetchError) {
-			error = 'Scan not found';
+	async function fetchScan() {
+		const res = await fetch(`/api/scan?id=${scanId}`);
+		if (!res.ok) {
+			error = res.status === 404 ? 'Scan not found' : 'Failed to load scan';
 			return;
 		}
+		const data = await res.json();
 
 		if (data) {
 			status = data.status;
 			repoUrl = data.repo_url || data.target_url || null;
+			if (data.progress) {
+				applyProgressData(data.progress);
+			}
 			if (data.status === 'complete') {
 				results = {
 					score: data.score,
@@ -396,30 +407,13 @@
 				scanDuration = data.duration_ms;
 				completedAt = data.completed_at;
 			} else if (data.status === 'failed') {
-				error = data.error || 'Scan failed';
+				error = data.error_message || data.error || 'Scan failed';
 			}
 		}
 	}
 
 	async function fetchProgress() {
-		const { data } = await supabase
-			.from('scan_progress')
-			.select('*')
-			.eq('scan_id', scanId)
-			.order('created_at', { ascending: false })
-			.limit(1)
-			.single();
-
-		if (data) {
-			progress = {
-				step: data.step,
-				stepNumber: getStepIndex(data.step),
-				totalSteps: steps.length,
-				message: data.message,
-				percent: data.percent || 0,
-				scanners: data.scanners || []
-			};
-		}
+		await fetchScan();
 	}
 
 	async function cancelScan() {
@@ -495,7 +489,6 @@
 	onMount(async () => {
 		trackPageView('Scan Results', { scan_id: scanId });
 		await fetchScan();
-		await fetchProgress();
 
 		// Track scan results if already complete
 		if (status === 'complete' && results) {
@@ -508,7 +501,6 @@
 			// Poll for progress updates as fallback (in case realtime isn't working)
 			progressPollInterval = setInterval(async () => {
 				await fetchProgress();
-				await fetchScan();
 				// Stop polling if scan is done
 				if (status === 'complete' || status === 'failed') {
 					if (progressPollInterval) {
