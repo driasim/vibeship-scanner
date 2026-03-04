@@ -12,6 +12,7 @@ import tempfile
 import shutil
 import hashlib
 import re
+from urllib.parse import quote, urlparse
 from collections import Counter
 from datetime import datetime
 from typing import Dict, List, Any, Optional
@@ -81,23 +82,62 @@ ALWAYS_LOAD_RULES = [
 ]
 
 
+def build_github_auth_clone_url(url: str, github_token: str) -> Optional[str]:
+    """
+    Build a GitHub HTTPS clone URL authenticated with a token.
+
+    Supports common GitHub URL forms:
+    - https://github.com/owner/repo(.git)
+    - https://www.github.com/owner/repo(.git)
+    - git@github.com:owner/repo(.git)
+    - ssh://git@github.com/owner/repo(.git)
+    """
+    if not github_token:
+        return None
+
+    repo_path = None
+    lowered = url.lower()
+
+    if lowered.startswith('git@github.com:'):
+        repo_path = url.split(':', 1)[1]
+    else:
+        parsed = urlparse(url)
+        host = (parsed.hostname or '').lower()
+        if host.endswith('github.com'):
+            repo_path = parsed.path.lstrip('/')
+
+    if not repo_path:
+        return None
+
+    repo_path = repo_path.strip().rstrip('/')
+    if not repo_path or repo_path.count('/') < 1:
+        return None
+
+    if repo_path.endswith('.git'):
+        repo_path = repo_path[:-4]
+
+    safe_token = quote(github_token, safe='')
+    return f'https://x-access-token:{safe_token}@github.com/{repo_path}.git'
+
+
 def clone_repo(url: str, target_dir: str, branch: str = 'main', github_token: str = None) -> bool:
     """Clone a git repository (shallow clone for speed)
 
-    For private repos, uses the GitHub token for authentication.
-    URL format with token: https://oauth2:TOKEN@github.com/owner/repo.git
+    For private GitHub repos, uses token-authenticated HTTPS clone URL:
+    https://x-access-token:TOKEN@github.com/owner/repo.git
     """
     try:
         clone_url = url
         print(f"[Clone] Starting clone: url={url}, hasToken={bool(github_token)}", file=sys.stderr, flush=True)
 
-        # If we have a GitHub token, inject it into the URL for authenticated cloning
-        if github_token and 'github.com' in url:
-            # Convert https://github.com/owner/repo to https://oauth2:TOKEN@github.com/owner/repo.git
-            clone_url = url.replace('https://github.com/', f'https://oauth2:{github_token}@github.com/')
-            if not clone_url.endswith('.git'):
-                clone_url += '.git'
-            print("[Clone] Using authenticated clone for private repo", file=sys.stderr, flush=True)
+        # If we have a GitHub token, convert any GitHub URL format to authenticated HTTPS.
+        if github_token:
+            auth_clone_url = build_github_auth_clone_url(url, github_token)
+            if auth_clone_url:
+                clone_url = auth_clone_url
+                print("[Clone] Using token-authenticated GitHub clone URL", file=sys.stderr, flush=True)
+            elif 'github.com' in url.lower():
+                print("[Clone] GitHub token provided, but URL could not be normalized for token auth", file=sys.stderr, flush=True)
 
         # For logging, mask the token in the URL
         log_url = clone_url
@@ -105,11 +145,15 @@ def clone_repo(url: str, target_dir: str, branch: str = 'main', github_token: st
             log_url = clone_url.replace(github_token, 'TOKEN_HIDDEN')
         print(f"[Clone] Running: git clone --depth 1 --branch {branch} {log_url}", file=sys.stderr, flush=True)
 
+        git_env = os.environ.copy()
+        git_env['GIT_TERMINAL_PROMPT'] = '0'
+
         result = subprocess.run(
             ['git', 'clone', '--depth', '1', '--branch', branch, clone_url, target_dir],
             capture_output=True,
             text=True,
-            timeout=120
+            timeout=120,
+            env=git_env
         )
         if result.returncode != 0:
             # Mask token in error output
@@ -128,7 +172,8 @@ def clone_repo(url: str, target_dir: str, branch: str = 'main', github_token: st
                 ['git', 'clone', '--depth', '1', clone_url, target_dir],
                 capture_output=True,
                 text=True,
-                timeout=120
+                timeout=120,
+                env=git_env
             )
             if result.returncode != 0:
                 stderr = result.stderr
