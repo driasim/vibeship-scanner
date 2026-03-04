@@ -467,10 +467,14 @@
 
 		rescanning = true;
 		try {
+			const githubToken = $auth.githubToken;
 			const response = await fetch('/api/scan', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ url: repoUrl })
+				body: JSON.stringify({
+					url: repoUrl,
+					githubToken: githubToken || undefined
+				})
 			});
 			const data = await response.json();
 			if (data.scanId) {
@@ -771,8 +775,10 @@
 			<h1>Scan Error</h1>
 			{#if error.toLowerCase().includes('clone') || error.toLowerCase().includes('repository') || error.toLowerCase().includes('not found')}
 				<p>This repository couldn't be scanned. It may be private or doesn't exist.</p>
-				{#if $auth.user}
+				{#if $auth.githubToken}
 					<p class="error-note">You're signed in but this repo may require additional permissions, or doesn't exist.</p>
+				{:else if $auth.user}
+					<p class="error-note">You're signed in, but your GitHub token is missing. Sign out and sign in again, then retry.</p>
 				{:else}
 					<p class="error-note">Sign in with GitHub in the header above to scan private repositories.</p>
 				{/if}
